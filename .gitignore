@@ -17,3 +17,7 @@ node_modules/
 
 ## Logs
 /log**
+
+## AI Tools
+CLAUDE.md
+.claude-code.json
