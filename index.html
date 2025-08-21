@@ -1,766 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Slimeworld Evolution Simulator</title>
-    <style>
-        :root{
-            --bg:#0b0f17;
-            --panel:#101827;
-            --panel-2:#0f1524;
-            --text:#e6f0ff;
-            --muted:#94a3b8;
-            --accent:#7c3aed; /* vivid purple */
-            --accent-2:#06b6d4; /* cyan */
-            --accent-3:#f59e0b; /* amber */
-            --good:#10b981; /* green */
-            --bad:#ef4444; /* red */
-            --warn:#f59e0b; /* amber */
-        }
-        *{box-sizing:border-box}
-        html,body{height:100%}
-        body{
-            margin:0; display:grid; grid-template-columns: 360px 1fr; grid-template-rows: auto 1fr; grid-template-areas:
-    "header header"
-    "left main";
-            background: radial-gradient(1200px 700px at 20% -10%, #14203b 0%, #0b0f17 60%, #070a12 100%);
-            color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-        }
-        header{
-            grid-area:header; padding:12px 16px; display:flex; align-items:center; gap:14px; border-bottom:1px solid #1f2a44;
-            background: linear-gradient(180deg, rgba(124,58,237,0.15), rgba(6,182,212,0.05));
-            backdrop-filter: blur(6px);
-        }
-        header h1{font-size:18px; margin:0; letter-spacing:0.3px}
-        .pill{font-size:12px; padding:4px 8px; border-radius:999px; background:rgba(6,182,212,0.15); color:#9be8ff; border:1px solid rgba(6,182,212,0.35)}
-        #status{font-size:12px; margin-left:8px; opacity:0.9}
-        #left{grid-area:left; padding:12px; overflow:auto; border-right:1px solid #1f2a44; background:linear-gradient(180deg, rgba(6,182,212,0.08), rgba(124,58,237,0.06));}
-        #main{grid-area:main; position:relative;}
-        .panel{background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid #263555; border-radius:16px; padding:14px; margin-bottom:12px; box-shadow: 0 6px 24px rgba(12,20,39,0.4), inset 0 0 0 1px rgba(255,255,255,0.02)}
-        .panel h2{font-size:14px; margin:0 0 10px 0; color:#c7d2fe; letter-spacing:0.4px}
-        .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0}
-        .row label{font-size:12px; color:var(--muted)}
-        input[type=range]{width:160px}
-        .controls-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-        #spawnPanel .controls-grid{grid-template-columns:1fr 1fr}
-        .controls-grid button, .controls-grid .toggle{width:100%}
-        button{min-height:36px}
-        .spawn-active{outline:2px solid var(--accent-2); box-shadow:0 0 0 1px rgba(6,182,212,0.4) inset}
-        #overlay{position:absolute; top:12px; right:12px; width:340px; max-width:40vw;
-            background:linear-gradient(180deg, rgba(2,6,23,0.92), rgba(2,6,23,0.72)); border:1px solid #1f2a44; border-radius:16px; padding:12px;}
-        #overlay.collapsed{width:180px; overflow:hidden}
-        #overlay.collapsed #inspector, #overlay.collapsed #stats, #overlay.collapsed #rtStats, #overlay.collapsed #miniView{display:none}
-        #overlay .icon{background:transparent; border:1px solid #2c3565; padding:4px 6px; border-radius:8px; font-size:12px}
-        button, .toggle{
-            background: linear-gradient(180deg, #1f2442, #171c34);
-            border: 1px solid #2c3565;
-            color: #dfe6ff;
-            padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight:600; letter-spacing:0.3px;
-            box-shadow: 0 8px 20px rgba(31,40,84,0.35), inset 0 0 0 1px rgba(255,255,255,0.03);
-        }
-        button:hover{transform: translateY(-1px); box-shadow: 0 10px 24px rgba(31,40,84,0.45)}
-        button:active{transform: translateY(0)}
-        .toggle input{display:none}
-        .toggle span{display:inline-block; padding:8px 10px; border-radius:10px; background:rgba(124,58,237,0.12); border:1px solid rgba(124,58,237,0.35)}
-        .toggle input:checked + span{background: rgba(6,182,212,0.18); border-color: rgba(6,182,212,0.55)}
-        #canvas{display:block; image-rendering: pixelated; margin:12px;}
-        #stats{font-size:12px; color:#cbd5e1; display:grid; grid-template-columns: 1fr 1fr; gap:8px}
-        .rtgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px}
-        .kv{background:linear-gradient(180deg, #0e1424, #0a1220); border:1px solid #1c2847; border-radius:12px; padding:8px}
-        .kv .k{color:#9aa8c0; font-size:11px}
-        .kv .v{font-weight:700; color:#e6f0ff}
-        .stat{background:linear-gradient(180deg, #0e1424, #0a1220); border:1px solid #1c2847; border-radius:12px; padding:8px}
-        .legend{display:flex; flex-wrap:wrap; gap:6px}
-        .chip{display:flex; gap:6px; align-items:center; background:rgba(148,163,184,0.1); border:1px solid rgba(148,163,184,0.25); padding:6px 8px; border-radius:999px; font-size:12px}
-        .dot{width:10px; height:10px; border-radius:50%}
-        .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; background:#0f172a; border:1px solid #23335c; padding:2px 6px; border-radius:8px}
-        .small{font-size:12px; color:#9aa8c0}
-        #alert{position:fixed; top:8px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.95); border:1px solid #2a3a66; color:#dbeafe; padding:8px 12px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.35); display:none; z-index:9999}
-        #alert.warn{border-color:#7c5800; color:#fff3d1}
-        #alert.error{border-color:#5b1111; color:#ffe0e0}
-        #testResults{font-size:12px; color:#cbd5e1}
-        canvas#miniView{width:100%; height:140px; border:1px solid #1f2a44; border-radius:10px; background:linear-gradient(180deg,#0e1424,#0a1220)}
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Slimeworld Evolution Simulator</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
+  <header>
     <h1>Slimeworld Evolution Simulator</h1>
-    <span class="pill">v2.3 • patterns + live inspector</span>
+    <span class="pill" id="version">v3.0 • inspector+scarce nutrients</span>
     <span id="status" class="small"></span>
-    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
-        <button id="btnPause">⏸️ Pause</button>
-        <button id="btnStep" title="Step one tick (Space)">Step</button>
-        <button id="btnReset">Reset</button>
-        <button id="btnScreenshot" title="Save PNG">📸 PNG</button>
-        <button id="btnExport" title="Export JSON save">💾 Save</button>
-        <input id="fileImport" type="file" accept="application/json" style="display:none" />
-        <button id="btnImport" title="Load JSON save">📂 Load</button>
+    <div class="header-actions">
+      <button id="btnPause">⏸️ Pause</button>
+      <button id="btnStep" title="Step one tick (Space)">Step</button>
+      <button id="btnReset">Reset</button>
+      <button id="btnScreenshot" title="Save PNG">📸 PNG</button>
+      <button id="btnExport" title="Export JSON save">💾 Save</button>
+      <input id="fileImport" type="file" accept="application/json" style="display:none" />
+      <button id="btnImport" title="Load JSON save">📂 Load</button>
     </div>
-</header>
+  </header>
 
-<div id="left">
+  <div id="left">
     <div class="panel" id="ecoPanel">
-        <h2>Simulation</h2>
-        <div class="row"><label>Seed <span class="small">(deterministic)</span></label><input id="seed" type="number" value="1337" min="0" step="1"/></div>
-        <div class="row"><label>World Size</label>
-            <select id="worldSize">
-                <option value="128x72">128×72 (fast)</option>
-                <option value="160x90" selected>160×90</option>
-                <option value="192x108">192×108</option>
-                <option value="256x144">256×144 (slower)</option>
-            </select>
-        </div>
-        <div class="row"><label>Speed</label><input id="speed" type="range" min="0.1" max="4" step="0.1" value="1.2"/></div>
-        <div class="row"><label>Mutation Rate</label><input id="mutRate" type="range" min="0" max="1" step="0.01" value="0.18"/></div>
-        <div class="row"><label>Carrying Capacity</label><input id="capacity" type="range" min="0.1" max="2.0" step="0.05" value="1.0"/></div>
-        <div class="controls-grid">
-            <label class="toggle" title="Humidity overlay"><input id="ovHumidity" type="checkbox"><span>Humidity</span></label>
-            <label class="toggle" title="Light overlay"><input id="ovLight" type="checkbox"><span>Light</span></label>
-            <label class="toggle" title="Nutrient overlay"><input id="ovNutrient" type="checkbox"><span>Nutrients</span></label>
-            <label class="toggle" title="Water mask"><input id="ovWater" type="checkbox"><span>Water</span></label>
-            <label class="toggle" title="Slime trails"><input id="ovTrail" type="checkbox"><span>Slime</span></label>
-        </div>
-        <div class="controls-grid">
-            <button id="btnReseed">Reseed Env</button>
-            <button id="btnShake">Season Pulse</button>
-        </div>
-        <div class="small">Hotkeys: <span class="kbd">Space</span> Step • <span class="kbd">P</span> Pause/Play • <span class="kbd">R</span> Reset • <span class="kbd">S</span> Screenshot</div>
+      <h2>Simulation</h2>
+      <div class="row"><label>Seed <span class="small">(deterministic)</span></label><input id="seed" type="number" value="1337" min="0" step="1"/></div>
+      <div class="row"><label>World Size</label>
+        <select id="worldSize">
+          <option value="128x72">128×72 (fast)</option>
+          <option value="160x90" selected>160×90</option>
+          <option value="192x108">192×108</option>
+          <option value="256x144">256×144 (slower)</option>
+        </select>
+      </div>
+      <div class="row"><label>Speed</label><input id="speed" type="range" min="0.1" max="4" step="0.1" value="1.2"/></div>
+      <div class="row"><label>Mutation Rate</label><input id="mutRate" type="range" min="0" max="1" step="0.01" value="0.18"/></div>
+      <div class="row"><label>Carrying Capacity</label><input id="capacity" type="range" min="0.1" max="2.0" step="0.05" value="1.0"/></div>
+      <div class="controls-grid">
+        <label class="toggle" title="Humidity overlay"><input id="ovHumidity" type="checkbox"><span>Humidity</span></label>
+        <label class="toggle" title="Light overlay"><input id="ovLight" type="checkbox"><span>Light</span></label>
+        <label class="toggle" title="Nutrient overlay"><input id="ovNutrient" type="checkbox"><span>Nutrients</span></label>
+        <label class="toggle" title="Water mask"><input id="ovWater" type="checkbox"><span>Water</span></label>
+        <label class="toggle" title="Slime trails"><input id="ovTrail" type="checkbox"><span>Slime</span></label>
+      </div>
+      <div class="controls-grid">
+        <button id="btnReseed">Reseed Env</button>
+        <button id="btnShake">Season Pulse</button>
+      </div>
+      <div class="small">Hotkeys: <span class="kbd">Space</span> Step • <span class="kbd">P</span> Pause/Play • <span class="kbd">R</span> Reset • <span class="kbd">S</span> Screenshot</div>
     </div>
 
     <div class="panel" id="spawnPanel">
-        <h2>Archetypes (spawn)</h2>
-        <div class="controls-grid" id="spawnGrid">
-            <button data-spawn="MAT">+ Foraging Mat</button>
-            <button data-spawn="CORD">+ Cord/Creeper</button>
-            <button data-spawn="TOWER">+ Tower/Canopy</button>
-            <button data-spawn="FLOAT">+ Floater/Raft</button>
-            <button data-spawn="EAT">+ Engulfer</button>
-            <button data-spawn="SCOUT">+ Scout/Prospector</button>
-        </div>
-        <div class="small">Click on the map to place after pressing a + button (click again to unselect).</div>
+      <h2>Archetypes (spawn)</h2>
+      <div class="controls-grid" id="spawnGrid">
+        <button data-spawn="MAT">+ Foraging Mat</button>
+        <button data-spawn="CORD">+ Cord/Creeper</button>
+        <button data-spawn="TOWER">+ Tower/Canopy</button>
+        <button data-spawn="FLOAT">+ Floater/Raft</button>
+        <button data-spawn="EAT">+ Engulfer</button>
+        <button data-spawn="SCOUT">+ Scout/Prospector</button>
+      </div>
+      <div class="small">Click on the map to place a starter colony after pressing a + button.</div>
     </div>
 
     <div class="panel">
-        <h2>Legend</h2>
-        <div class="legend" id="legend"></div>
+      <h2>Legend</h2>
+      <div class="legend" id="legend"></div>
     </div>
 
     <div class="panel">
-        <h2>Diagnostics</h2>
-        <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap">
-            <button id="btnTests">Run Tests</button>
-        </div>
-        <div id="testResults" class="small"></div>
+      <h2>Diagnostics</h2>
+      <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap">
+        <button id="btnTests">Run Tests</button>
+      </div>
+      <div id="testResults" class="small"></div>
     </div>
 
     <div class="panel">
-        <h2>About this world</h2>
-        <div class="small">Slime-mould-inspired metaheuristic growth with trail reinforcement and diffusion/evaporation pruning. Water appears as connected pools. Per-colony generated patterns make individuals visually distinct.</div>
+      <h2>About this world</h2>
+      <div class="small">Colonies grow using a <b>slime-mould-inspired</b> metaheuristic: they reinforce successful routes with trails, sense combined nutrient+trail gradients, and prune dead ends via diffusion & evaporation. Archetypes vary in trail sensitivity, deposit rate, and sensing radius. Water emerges as <b>connected pools</b>. This build adds a live Inspector and makes nutrients <b>scarcer, hotspot-driven, and adaptive</b>.</div>
     </div>
-</div>
+  </div>
 
-<div id="main">
+  <div id="main">
     <canvas id="canvas"></canvas>
 
-    <div id="overlay" class="collapsed">
-        <h3 style="display:flex;align-items:center;justify-content:space-between;">Inspector <button id="btnOverlayCollapse" class="icon" title="Toggle inspector">⟷</button></h3>
-        <div id="inspector" class="small">Click a colony to inspect.</div>
-        <canvas id="miniView" width="240" height="160"></canvas>
-        <div id="rtStats" class="rtgrid"></div>
-        <div id="stats" style="margin-top:8px"></div>
+    <div id="overlay" style="max-width:360px">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;">Inspector <button id="btnOverlayCollapse" class="icon" title="Toggle inspector">⟷</button></h3>
+      <div id="inspector" class="small">Click a colony to inspect.</div>
+      <canvas id="miniView" width="240" height="160" class="mini"></canvas>
+      <div id="rtStats" class="rtgrid"></div>
+      <div id="stats" style="margin-top:8px"></div>
+      <div class="inspector-actions">
+        <button id="btnKill">☠️ Kill colony</button>
+        <button id="btnNudge">✨ Nudge growth</button>
+      </div>
     </div>
-</div>
 
-<div id="alert"></div>
+    <div id="tooltip"></div>
+  </div>
 
-<script>
-    /* ===== Boot marker ===== */
-    (function(){ const sEl = document.getElementById('status'); if(sEl) sEl.textContent = 'booting…'; })();
+  <div id="alert"></div>
 
-    /* ===== PRNG & Helpers ===== */
-    function xmur3(str){for(var i=0,h=1779033703^str.length;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^h>>>16)>>>0}}
-    function sfc32(a,b,c,d){return function(){a|=0;b|=0;c|=0;d|=0;var t=(a+b|0)+d|0;d=d+1|0;a=b^b>>>9;b=c+(c<<3)|0;c=(c<<21|c>>>11);c=c+t|0;return (t>>>0)/4294967296}}
-    function clamp(v,a,b){return v<a?a:(v>b?b:v)}
-    function lerp(a,b,t){return a+(b-a)*t}
-    function smoothstep(t){return t*t*(3-2*t)}
-    function randRange(r,min,max){return min + r()*(max-min)}
-    function percentile(arr, p){ const a = Array.from(arr); a.sort((x,y)=>x-y); const i = Math.max(0, Math.min(a.length-1, Math.floor(p*(a.length-1)))); return a[i]; }
-    function notify(msg, level='info', ttl=1600){ const el=document.getElementById('alert'); el.className=''; if(level==='warn') el.classList.add('warn'); if(level==='error') el.classList.add('error'); el.textContent=msg; el.style.display='block'; clearTimeout(notify._t); notify._t=setTimeout(()=>{el.style.display='none'}, ttl); }
-    window.addEventListener('error', (e)=>{ console.error(e.error||e.message); notify('JS error: '+(e.error?.message||e.message), 'error', 6000); });
-    window.addEventListener('unhandledrejection', (e)=>{ console.error(e.reason); notify('Promise error: '+(e.reason?.message||e.reason), 'error', 6000); });
-
-    /* ===== ValueNoise (fractal) ===== */
-    function ValueNoise(seed){
-        const hash = xmur3(seed.toString());
-        const r = sfc32(hash(),hash(),hash(),hash());
-        const perm = new Uint8Array(512);
-        for(let i=0;i<256;i++) perm[i]=i;
-        for(let i=255;i>0;i--){const j=Math.floor(r()*(i+1)); [perm[i],perm[j]]=[perm[j],perm[i]]}
-        for(let i=0;i<256;i++) perm[i+256]=perm[i];
-        function grad(ix,iy){const v=perm[(ix+perm[iy&255])&255]; return v/255}
-        function noise2D(x,y){
-            const x0=Math.floor(x), y0=Math.floor(y);
-            const xf=x-x0, yf=y-y0;
-            const v00=grad(x0,y0), v10=grad(x0+1,y0), v01=grad(x0,y0+1), v11=grad(x0+1,y0+1);
-            const u=smoothstep(xf), v=smoothstep(yf);
-            const x1=lerp(v00,v10,u); const x2=lerp(v01,v11,u);
-            return lerp(x1,x2,v);
-        }
-        function fractal2D(x,y,oct=4, lac=2.0, gain=0.5){
-            let amp=1, freq=1, sum=0, norm=0;
-            for(let i=0;i<oct;i++){ sum += amp*noise2D(x*freq,y*freq); norm += amp; amp*=gain; freq*=lac }
-            return sum/norm; // 0..1
-        }
-        return {noise2D, fractal2D, r};
-    }
-
-    /* ===== World ===== */
-    const Archetypes = {
-        MAT:   { name:"Foraging Mat",   code:"MAT",   base:{water_need:0.7, light_use:0.2,  photosym:0.15, transport:0.6,  predation:0.1,  spore:0.5,  defense:0.5, flow:0.8}},
-        CORD:  { name:"Cord/Creeper",   code:"CORD",  base:{water_need:0.6, light_use:0.25, photosym:0.2,  transport:0.85, predation:0.15, spore:0.45, defense:0.55,flow:0.9}},
-        TOWER: { name:"Tower/Canopy",   code:"TOWER", base:{water_need:0.55,light_use:0.85, photosym:0.75,transport:0.5,  predation:0.05, spore:0.4,  defense:0.6, flow:0.5}},
-        FLOAT: { name:"Floater/Raft",   code:"FLOAT", base:{water_need:0.9, light_use:0.5,  photosym:0.6,  transport:0.55, predation:0.08, spore:0.6,  defense:0.45,flow:0.6}},
-        EAT:   { name:"Engulfer",       code:"EAT",   base:{water_need:0.5, light_use:0.05, photosym:0.0,  transport:0.7,  predation:0.85, spore:0.35, defense:0.7, flow:0.75}},
-        SCOUT: { name:"Scout/Prospector",code:"SCOUT", base:{water_need:0.55,light_use:0.35, photosym:0.25, transport:0.7,  predation:0.05, spore:0.55, defense:0.35,flow:0.95}},
-    };
-    const TypeBehavior = {
-        MAT:   { trailW:0.30, nutrientW:0.70, deposit:0.50, senseR:3 },
-        CORD:  { trailW:0.55, nutrientW:0.60, deposit:0.80, senseR:7 },
-        TOWER: { trailW:0.15, nutrientW:0.55, deposit:0.30, senseR:3 },
-        FLOAT: { trailW:0.40, nutrientW:0.70, deposit:0.60, senseR:4, waterAffinity:0.25 },
-        EAT:   { trailW:0.60, nutrientW:0.45, deposit:0.65, senseR:5 },
-        SCOUT: { trailW:0.35, nutrientW:0.85, deposit:0.25, senseR:8 },
-    };
-    const World = {
-        W:160, H:90,
-        env:{humidity:[], light:[], nutrient:[], water:[]},
-        tiles:[], biomass:[],
-        colonies:[], nextId:1,
-        rng:null, field:null,
-        tick:0, paused:false, speed:1.2,
-        mutationRate:0.18, capacity:1.0,
-        hover:{x:-1,y:-1}, typePressure:{},
-    };
-    const Slime = {
-        trail:null, trailNext:null,
-        params:{evap:0.985, diff:0.35, trailScale:0.03},
-        clear(){ this.trail.fill(0) },
-        sat(v){ return 1 - Math.exp(-this.params.trailScale * v) },
-        diffuseEvaporate(){
-            const {evap,diff} = this.params; const W=World.W, H=World.H; const T=this.trail, N=this.trailNext;
-            for(let y=0;y<H;y++){
-                for(let x=0;x<W;x++){
-                    const i=y*W + x;
-                    const l=T[y*W + ((x-1+W)%W)]||0, r=T[y*W + ((x+1)%W)]||0, u=T[((y-1+H)%H)*W + x]||0, d=T[((y+1)%H)*W + x]||0;
-                    const self = T[i]||0;
-                    const mixed = (1-diff)*self + (diff*0.25)*(l+r+u+d);
-                    N[i] = mixed * evap;
-                }
-            }
-            // swap buffers
-            this.trail = N;
-            this.trailNext = T;
-        },
-    };
-    function idx(x,y){return y*World.W + x}
-    function inBounds(x,y){return x>=0&&y>=0&&x<World.W&&y<World.H}
-
-    function setupWorld(seed, sizeStr){
-        const [W,H] = sizeStr.split('x').map(n=>parseInt(n,10));
-        World.W=W; World.H=H;
-        World.tiles = new Int32Array(W*H).fill(-1);
-        World.biomass = new Float32Array(W*H).fill(0);
-        World.env.humidity = new Float32Array(W*H);
-        World.env.light = new Float32Array(W*H);
-        World.env.nutrient = new Float32Array(W*H);
-        World.env.water = new Uint8Array(W*H);
-        World._nutrientNext = new Float32Array(W*H);
-        World.colonies=[]; World.nextId=1; World.tick=0;
-        const noise = ValueNoise(seed);
-        World.rng = noise.r; World.field = noise;
-        Slime.trail = new Float32Array(W*H); Slime.trailNext = new Float32Array(W*H);
-        buildEnvironment();
-        seedInitialColonies();
-        updateTypePressure();
-        refreshLegend();
-    }
-
-    /* --- Environment with pooled water --- */
-    function smoothBinaryGrid(src, W, H, iters=2){
-        const a=new Uint8Array(src); const b=new Uint8Array(src.length);
-        for(let t=0;t<iters;t++){
-            for(let y=0;y<H;y++){
-                for(let x=0;x<W;x++){
-                    let cnt=0; for(let dy=-1;dy<=1;dy++){ for(let dx=-1;dx<=1;dx++){ if(dx===0&&dy===0) continue; const nx=x+dx, ny=y+dy; if(nx>=0&&ny>=0&&nx<W&&ny<H) cnt+=a[ny*W+nx]; }}
-                    const i=y*W+x; if(cnt>=5) b[i]=1; else if(cnt<=2) b[i]=0; else b[i]=a[i];
-                }
-            }
-            a.set(b);
-        }
-        return a;
-    }
-    function buildEnvironment(){
-        const {W,H,env} = World; const f = World.field;
-        const sHum=randRange(World.rng, 120, 420), sLig=randRange(World.rng, 200, 700), sNut=randRange(World.rng, 150, 600), sWat=randRange(World.rng, 180, 520);
-        const waterSeed = new Float32Array(W*H);
-        for(let y=0;y<H;y++){
-            for(let x=0;x<W;x++){
-                const nx=x/W, ny=y/H;
-                const h0 = f.fractal2D(nx*sHum, ny*sHum, 4, 2.0, 0.55);
-                const l0 = f.fractal2D(1000+nx*sLig, 1000+ny*sLig, 4, 2.0, 0.5);
-                const n0 = f.fractal2D(2000+nx*sNut, 2000+ny*sNut, 5, 2.2, 0.55);
-                const basin = f.fractal2D(3000+nx*sWat, 3000+ny*sWat, 5, 2.2, 0.55);
-                const band = 0.5+0.5*Math.sin((ny-0.2)*Math.PI*2);
-                const light = clamp(0.25 + 0.75*l0*band, 0, 1);
-                const humid = clamp(0.2 + 0.8*h0*(1.0 - 0.25*Math.abs(nx-0.5)), 0, 1);
-                const nutr  = clamp(0.3 + 0.7*n0, 0, 1);
-                env.humidity[idx(x,y)] = humid;
-                env.light[idx(x,y)] = light;
-                env.nutrient[idx(x,y)] = nutr;
-                const seed = 0.55*humid + 0.3*(1-light) + 0.6*(basin-0.5);
-                waterSeed[idx(x,y)] = seed;
-            }
-        }
-        let water = new Uint8Array(W*H);
-        const desired = 0.22 + 0.08*World.rng();
-        const thr = percentile(waterSeed, 1 - desired);
-        for(let i=0;i<water.length;i++) water[i] = waterSeed[i] > thr ? 1 : 0;
-        water = smoothBinaryGrid(water, W, H, 2);
-        const cleaned=new Uint8Array(water.length);
-        for(let y=0;y<H;y++){
-            for(let x=0;x<W;x++){
-                const i=idx(x,y); if(!water[i]) { cleaned[i]=0; continue; }
-                let cnt=0; for(let dy=-1;dy<=1;dy++){ for(let dx=-1;dx<=1;dx++){ if(dx===0&&dy===0) continue; const nx=x+dx, ny=y+dy; if(nx>=0&&ny>=0&&nx<W&&ny<H) cnt+=water[ny*W+nx]; }}
-                cleaned[i] = cnt>=1 ? 1 : 0;
-            }
-        }
-        env.water.set(cleaned);
-        for(let i=0;i<W*H;i++){
-            if(env.water[i]){ env.humidity[i] = clamp(env.humidity[i]*0.88 + 0.12*1,0,1); env.nutrient[i] = clamp(env.nutrient[i] + 0.04, 0,1); }
-        }
-    }
-
-    /* ===== Colonies ===== */
-    function randomColorVivid(){ const h = randRange(World.rng, 0, 360); const s = randRange(World.rng, 70, 95); const l = randRange(World.rng, 45, 60); return `hsl(${h.toFixed(1)} ${s.toFixed(1)}% ${l.toFixed(1)}%)`; }
-    function jitterColor(hsl, amt=8){ const m = /hsl\\(([-\\d.]+) ([\\d.]+)% ([\\d.]+)%\\)/.exec(hsl); if(!m) return randomColorVivid(); let [_,h,s,l] = m; h=parseFloat(h); s=parseFloat(s); l=parseFloat(l); h=(h+randRange(World.rng,-amt,amt)+360)%360; s=clamp(s+randRange(World.rng,-5,5),60,98); l=clamp(l+randRange(World.rng,-5,5),35,68); return `hsl(${h.toFixed(1)} ${s.toFixed(1)}% ${l.toFixed(1)}%)`; }
-    function genSpeciesName(type){
-        const genusParts=['Myxo','Physa','Plasmo','Dicty','Fuligo','Arcyria','Lepto','Stemo','Lampro','Lycog','Cratera','Stemon'];
-        const epithetParts=['luminis','hydra','nutrix','vias','silvae','aqua','tenebrae','celer','retis','spora','flumen','saxum'];
-        const hints={MAT:'matta',CORD:'funis',TOWER:'turris',FLOAT:'ratis',EAT:'vorax',SCOUT:'cursor'};
-        const g=genusParts[Math.floor(World.rng()*genusParts.length)];
-        const e=epithetParts[Math.floor(World.rng()*epithetParts.length)];
-        return g + ' ' + e + '-' + (hints[type]||'forma');
-    }
-    function isValidType(type){ return Object.prototype.hasOwnProperty.call(Archetypes, type) }
-    function newColony(type, x, y, parent=null){
-        if(!isValidType(type)){ console.warn('newColony: invalid type', type); notify(`Invalid archetype: ${type}`, 'error'); return null; }
-        const arch = Archetypes[type];
-        const traits = {...arch.base};
-        for(const k in traits){ traits[k] = clamp(traits[k] + randRange(World.rng,-0.05,0.05), 0, 1) }
-        const color = parent? jitterColor(parent.color) : randomColorVivid();
-        const id = World.nextId++;
-        const species = parent? parent.species : genSpeciesName(type);
-        const c = { id, type, name: arch.name, species, x, y, color, traits, age:0, biomass:1.0, gen: parent? (parent.gen+1):0, parent: parent? parent.id:null, kids:[], lastFit:0 };
-        if(parent) parent.kids.push(id);
-        // per-colony pattern
-        c.pattern = createPatternForColony(c);
-        World.colonies.push(c);
-        const X=clamp(x,0,World.W-1), Y=clamp(y,0,World.H-1); const i=idx(X,Y);
-        World.tiles[i] = id;
-        World.biomass[i] = Math.max(World.biomass[i] || 0, 0.4);
-        Slime.trail[i] = (Slime.trail[i] || 0) + (TypeBehavior[type]?.deposit||0.5);
-        return c;
-    }
-    function seedInitialColonies(){ const {W,H} = World; const types = Object.keys(Archetypes); const count = 8; for(let i=0;i<count;i++){ const t = types[Math.floor(World.rng()*types.length)]; const x = Math.floor(World.rng()*W), y=Math.floor(World.rng()*H); newColony(t, x, y, null); } }
-    function mutateTraits(traits){ const t = {...traits}; const keys=Object.keys(t); const m=World.mutationRate; for(const k of keys){ const sigma=0.12*m; t[k]=clamp(t[k] + randRange(World.rng,-sigma,sigma), 0, 1);} return t; }
-
-    /* ===== Balance & Starvation ===== */
-    function updateTypePressure(){ const counts = {MAT:0,CORD:0,TOWER:0,FLOAT:0,EAT:0,SCOUT:0}; const idToType=new Map(); for(const c of World.colonies){ idToType.set(c.id,c.type) } let filled=0; for(let i=0;i<World.tiles.length;i++){ const id=World.tiles[i]; if(id===-1) continue; filled++; const t=idToType.get(id); if(t){ counts[t]=(counts[t]||0)+1; } } const total=Math.max(1,filled); World.typePressure={}; for(const t of Object.keys(Archetypes)){ const share=(counts[t]||0)/total; const pressure=clamp(1 - 0.7*share, 0.55, 1.0); World.typePressure[t]=pressure; } }
-    function starvationSweep(){ const {nutrient, light}=World.env; const idToCol=new Map(); for(const c of World.colonies){ idToCol.set(c.id,c); }
-        for(let i=0;i<World.tiles.length;i++){
-            const id=World.tiles[i]; if(id===-1) continue; const col=idToCol.get(id); if(!col){ World.tiles[i]=-1; continue; }
-            const n=nutrient[i], l=light[i], ps=col.traits.photosym||0; const energy=0.7*n + 0.3*ps*l;
-            const cons=Math.min(n, 0.008 * Math.max(0.1, World.biomass[i])); nutrient[i]=clamp(n - cons, 0, 1);
-            if(energy < 0.35){ const deficit=(0.35-energy); const factor=1 - Math.min(0.8*deficit, 0.28); World.biomass[i]*=factor; } else { const cap=World.capacity; if(World.biomass[i]<cap){ World.biomass[i]=Math.min(cap, World.biomass[i] + 0.005*(energy-0.35)); } }
-            if(World.biomass[i] < 0.05){ World.tiles[i]=-1; }
-        }
-    }
-    function nutrientDynamics(){
-        const {nutrient, humidity, water} = World.env;
-        const Nn = World._nutrientNext; const W=World.W, H=World.H;
-        const diff=0.12, regen=0.01;
-        for(let y=0;y<H;y++){
-            for(let x=0;x<W;x++){
-                const i=y*W+x; const n=nutrient[i];
-                const l=nutrient[y*W + ((x-1+W)%W)], r=nutrient[y*W + ((x+1)%W)], u=nutrient[((y-1+H)%H)*W + x], d=nutrient[((y+1+H)%H)*W + x];
-                const mixed = (1-diff)*n + (diff*0.25)*(l+r+u+d);
-                const target = clamp(0.2 + 0.6*humidity[i] + 0.2*water[i], 0, 1);
-                Nn[i] = clamp(mixed + regen*(target - mixed), 0, 1);
-            }
-        }
-        nutrient.set(Nn);
-    }
-
-    /* ===== Suitability & Growth ===== */
-    function suitabilityAt(col, x, y){
-        const {humidity, light, nutrient, water} = World.env; const i=idx(x,y);
-        function s(field){
-            let sum = field[i]; let count=1;
-            if(inBounds(x-1,y)) { sum += field[idx(x-1,y)]; count++; }
-            if(inBounds(x+1,y)) { sum += field[idx(x+1,y)]; count++; }
-            if(inBounds(x,y-1)) { sum += field[idx(x,y-1)]; count++; }
-            if(inBounds(x,y+1)) { sum += field[idx(x,y+1)]; count++; }
-            return sum / count;
-        }
-        const h=s(humidity), l=s(light), n=nutrient[i], w=water[i];
-        const T=col.traits; const B=TypeBehavior[col.type] || TypeBehavior.MAT;
-        const waterFit = 1.0 - Math.abs(h - T.water_need);
-        const lightFit = T.photosym>0 ? (0.55*(1.0 - Math.abs(l - T.light_use)) + 0.45*T.photosym*l) : (1.0 - 0.6*l);
-        const trSat = Slime.sat(Slime.trail[i]);
-        const denom = Math.max(1e-6, (B.nutrientW||0) + (B.trailW||0));
-        const chemo = ((B.nutrientW||0)*n + (B.trailW||0)*trSat) / denom;
-        // Bonuses/penalties
-        let raftBonus = (col.type==='FLOAT') ? (w? 0.25: -0.08) : 0; raftBonus += (B.waterAffinity && w)? B.waterAffinity:0;
-        let towerPenalty = (col.type==='TOWER' && w)? -0.12 : 0;
-        const base = clamp(0.06*waterFit + 0.06*lightFit + 0.88*chemo + raftBonus + towerPenalty, 0, 1);
-        // Capacity pressure
-        const cap = World.capacity; const density = World.biomass[i];
-        const capPenalty = -0.35*clamp((density - cap), 0, 1);
-        const pressure = World.typePressure[col.type] ?? 1;
-        return clamp(base*pressure + capPenalty, 0, 1);
-    }
-    function tryExpand(col){
-        const B=TypeBehavior[col.type] || TypeBehavior.MAT;
-        const cx=col.x, cy=col.y; const r=B.senseR||5;
-        let best=null, bestScore=-1, bestI=-1;
-        for(let dy=-r; dy<=r; dy++){
-            for(let dx=-r; dx<=r; dx++){
-                const x=cx+dx, y=cy+dy; if(!inBounds(x,y)) continue;
-                const i=idx(x,y); if(World.tiles[i]!==col.id) continue;
-                for(const [sx,sy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-                    const nx=x+sx, ny=y+sy; if(!inBounds(nx,ny)) continue; const j=idx(nx,ny);
-                    const foe = World.tiles[j]; const s = suitabilityAt(col, nx, ny);
-                    let ok=false;
-                    if(foe===-1) ok=true; else if(foe===col.id) ok=false; else {
-                        const enemy = World.colonies.find(c=>c.id===foe);
-                        if(!enemy) ok=true; else {
-                            const pred = col.traits.predation - (enemy.traits.defense*0.7);
-                            const comp = s - suitabilityAt(enemy, nx, ny);
-                            ok = (pred + comp) > randRange(World.rng,-0.15,0.1);
-                        }
-                    }
-                    if(ok){ const trailBias = 0.06*Slime.sat(Slime.trail[j]); const score = s + trailBias + (foe===-1?0.05:0) + World.rng()*0.02; if(score>bestScore){ bestScore=score; best={x:nx,y:ny}; bestI=j } }
-                }
-            }
-        }
-        if(best){ World.tiles[bestI]=col.id; World.biomass[bestI]=clamp(World.biomass[bestI]+0.2, 0, 2.5); col.x=best.x; col.y=best.y; const dep=(TypeBehavior[col.type]?.deposit||0.5) * (0.5 + 0.5*col.traits.flow); Slime.trail[bestI]+=dep; World.env.nutrient[bestI]=clamp(World.env.nutrient[bestI]-0.03,0,1); return true; }
-        return false;
-    }
-    function stepEcosystem(){
-        const steps = Math.max(1, Math.floor(8*World.speed));
-        for(let s=0;s<steps;s++){
-            World.tick++;
-            if(World.tick%5===0){ const drift = 0.002*World.speed; for(let i=0;i<World.env.humidity.length;i++){ World.env.humidity[i] = clamp(World.env.humidity[i] + randRange(World.rng,-drift,drift), 0, 1); World.env.light[i] = clamp(World.env.light[i] + randRange(World.rng,-drift,drift), 0, 1); } }
-            const cols = World.colonies; if(cols.length>0){
-                for(let k=0;k<cols.length;k++){
-                    const c = cols[(k + (World.tick%cols.length))%cols.length]; if(!c) continue; c.age++;
-                    c.lastFit = suitabilityAt(c, clamp(Math.round(c.x),0,World.W-1), clamp(Math.round(c.y),0,World.H-1));
-                    if(!tryExpand(c)) { const decay = (c.lastFit<0.4) ? 0.985 : 0.992; c.biomass *= decay; } else { c.biomass = clamp(c.biomass + 0.01, 0, 3); }
-                    const pressure = World.typePressure[c.type] ?? 1; const spawnP = (0.003 + 0.008*World.mutationRate) * pressure;
-                    if(c.biomass>0.8 && c.lastFit>0.55 && Math.random()< spawnP){
-                        const dir=[[1,0],[-1,0],[0,1],[0,-1]][Math.floor(World.rng()*4)]; const bx = clamp(Math.round(c.x+dir[0]*2),0,World.W-1); const by = clamp(Math.round(c.y+dir[1]*2),0,World.H-1);
-                        const child = {...c}; child.id = World.nextId++; child.parent=c.id; child.gen=c.gen+1; child.kids=[]; child.age=0; child.x=bx; child.y=by; child.biomass=0.6; child.traits = mutateTraits(c.traits); child.color = jitterColor(c.color, 14); child.pattern=createPatternForColony(child);
-                        World.colonies.push(child); c.kids.push(child.id); const bi=idx(bx,by); if(World.tiles[bi]===-1){World.tiles[bi]=child.id; World.biomass[bi]=0.4; Slime.trail[bi]+= (TypeBehavior[c.type]?.deposit||0.5); }
-                    }
-                }
-            }
-            Slime.diffuseEvaporate();
-            starvationSweep(); nutrientDynamics(); if(World.tick%30===0) updateTypePressure();
-            if(World.tick%60===0){ const alive = new Set(World.tiles); World.colonies = World.colonies.filter(c=>alive.has(c.id)); }
-        }
-    }
-
-    /* ===== Rendering (with per-colony pattern) ===== */
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', {alpha:false});
-    let viewScale = 1;
-    function resize(){
-        const rect = document.getElementById('main').getBoundingClientRect();
-        const cellCSS = Math.max(2, Math.floor(Math.min((rect.width-24)/World.W, (rect.height-24)/World.H)));
-        const cssW = World.W*cellCSS, cssH = World.H*cellCSS;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.style.width = cssW+'px';
-        canvas.style.height = cssH+'px';
-        canvas.width = Math.floor(cssW*dpr);
-        canvas.height = Math.floor(cssH*dpr);
-        ctx.setTransform(dpr,0,0,dpr,0,0);
-        canvas.style.margin='12px';
-        viewScale = cellCSS;
-    }
-    window.addEventListener('resize', ()=>{resize(); draw(true)});
-
-    function createPatternForColony(col){
-        // tiny 8x8 texture, deterministic using id
-        const off = document.createElement('canvas'); off.width=8; off.height=8; const p=off.getContext('2d');
-        const rseed = xmur3(String(col.id)); const r = sfc32(rseed(), rseed(), rseed(), rseed());
-        p.clearRect(0,0,8,8);
-        p.globalAlpha = 0.9;
-        const mode = Math.floor(r()*6);
-        p.strokeStyle = "#ffffff"; p.lineWidth=1;
-        p.fillStyle = "#ffffff";
-        if(mode===0){ // diagonal /
-            for(let i=-8;i<16;i+=3){ p.beginPath(); p.moveTo(i,8); p.lineTo(i+8,0); p.stroke(); }
-        } else if(mode===1){ // diagonal \
-            for(let i=-8;i<16;i+=3){ p.beginPath(); p.moveTo(i,0); p.lineTo(i+8,8); p.stroke(); }
-        } else if(mode===2){ // grid
-            for(let i=1;i<8;i+=3){ p.beginPath(); p.moveTo(i,0); p.lineTo(i,8); p.stroke(); p.beginPath(); p.moveTo(0,i); p.lineTo(8,i); p.stroke(); }
-        } else if(mode===3){ // dots
-            for(let y=1;y<8;y+=3){ for(let x=1;x<8;x+=3){ p.fillRect(x, y, 1, 1); } }
-        } else if(mode===4){ // cross
-            for(let i=1;i<8;i+=3){ p.beginPath(); p.moveTo(i,0); p.lineTo(8-i,8); p.stroke(); p.beginPath(); p.moveTo(0,i); p.lineTo(8,8-i); p.stroke(); }
-        } else { // hatch + dots
-            for(let i=-8;i<16;i+=4){ p.beginPath(); p.moveTo(i,8); p.lineTo(i+8,0); p.stroke(); }
-            for(let y=2;y<8;y+=4){ for(let x=2;x<8;x+=4){ p.fillRect(x, y, 1, 1); } }
-        }
-        return off;
-    }
-
-    function draw(){
-        const {W,H} = World; const cell=viewScale; const t=World.tiles; const b=World.biomass; ctx.imageSmoothingEnabled=false; ctx.fillStyle='#050812'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        const ovH = document.getElementById('ovHumidity').checked; const ovL = document.getElementById('ovLight').checked; const ovN = document.getElementById('ovNutrient').checked; const ovW = document.getElementById('ovWater').checked; const ovT = document.getElementById('ovTrail').checked;
-        if(ovH||ovL||ovN||ovW){
-            const img = ctx.createImageData(W,H);
-            for(let y=0;y<H;y++){
-                for(let x=0;x<W;x++){
-                    const i=idx(x,y); const k=i*4; let r=0,g=0,bl=0; if(ovH){ g = Math.round(255*World.env.humidity[i]); } if(ovL){ r = Math.max(r, Math.round(255*World.env.light[i])); } if(ovN){ bl = Math.max(bl, Math.round(255*World.env.nutrient[i])); } if(ovW && World.env.water[i]){ r=40; g=140; bl=255; } img.data[k]=r; img.data[k+1]=g; img.data[k+2]=bl; img.data[k+3]=180;
-                }
-            }
-            const off = document.createElement('canvas'); off.width=W; off.height=H; const octx=off.getContext('2d'); octx.putImageData(img,0,0); ctx.drawImage(off,0,0,W*cell,H*cell);
-        }
-        if(ovT){
-            // render slime trail as heatmap overlay
-            const img = ctx.createImageData(W,H);
-            let max=0; for(let i=0;i<Slime.trail.length;i++) max=Math.max(max,Slime.trail[i]);
-            const inv = max>0? 1/max : 0;
-            for(let y=0;y<H;y++){
-                for(let x=0;x<W;x++){
-                    const i=y*W+x, k=i*4; const p=Math.pow(Slime.trail[i]*inv,0.6);
-                    const r=Math.floor(255*Math.max(0, Math.min(1, p*1.2)));
-                    const g=Math.floor(255*Math.max(0, Math.min(1, (1.5*p*(1-p)))));
-                    const b=Math.floor(255*Math.max(0, Math.min(1, (1.3*(1-p)))));
-                    img.data[k]=r; img.data[k+1]=g; img.data[k+2]=b; img.data[k+3]=Math.floor(255*Math.min(1, 0.15+0.85*p));
-                }
-            }
-            const off = document.createElement('canvas'); off.width=W; off.height=H; const octx=off.getContext('2d');
-            octx.putImageData(img,0,0); ctx.imageSmoothingEnabled=false; ctx.drawImage(off,0,0,W*cell,H*cell);
-        }
-        // Draw colonies with color + pattern
-        const map = new Map(); for(const c of World.colonies){ map.set(c.id, c); }
-        for(let y=0;y<H;y++){
-            for(let x=0;x<W;x++){
-                const i=idx(x,y); const id=t[i]; if(id===-1) continue;
-                const col = map.get(id);
-                ctx.globalAlpha = 0.65;
-                ctx.fillStyle = col.color; ctx.fillRect(x*cell,y*cell,cell,cell);
-                if(col.pattern){
-                    const px = x*cell, py = y*cell;
-                    // draw the 8x8 pattern scaled to tile
-                    ctx.globalAlpha = 0.22;
-                    ctx.imageSmoothingEnabled=false;
-                    ctx.drawImage(col.pattern, 0,0,8,8, px,py, cell,cell);
-                }
-            }
-        }
-        ctx.globalAlpha=1;
-        // hover
-        if(World.hover.x>=0){ ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=2; ctx.strokeRect(World.hover.x*cell+0.5, World.hover.y*cell+0.5, cell-1, cell-1); }
-    }
-
-    /* ===== Interaction & UI ===== */
-    let needRedraw=true; let stepping=false; let last=0;
-    function loop(ts){
-        last = ts;
-        if(!World.paused || stepping){ stepEcosystem(); needRedraw=true; stepping=false; }
-        if(needRedraw){ draw(); needRedraw=false; }
-        requestAnimationFrame(loop);
-    }
-    function playPause(){ World.paused = !World.paused; document.getElementById('btnPause').textContent = World.paused? '▶️ Play' : '⏸️ Pause'; }
-    function reset(){ const seed = parseInt(document.getElementById('seed').value||'1337',10); const size = document.getElementById('worldSize').value; setupWorld(seed, size); World.paused=false; document.getElementById('btnPause').textContent='⏸️ Pause'; resize(); draw(); }
-
-    function colonyAtCanvas(px,py){ const cell=viewScale; const x=Math.floor(px/cell), y=Math.floor(py/cell); if(!inBounds(x,y)) return null; const id=World.tiles[idx(x,y)]; if(id===-1) return null; return World.colonies.find(c=>c.id===id) || null; }
-
-    let selectedId=null;
-    function updateInspector(c){
-        const el=document.getElementById('inspector'); const stats=document.getElementById('stats'); const rt=document.getElementById('rtStats');
-        if(!c){ el.textContent='Click a colony to inspect.'; stats.innerHTML=''; selectedId=null; const mv=document.getElementById('miniView'); if(mv){ const mctx=mv.getContext('2d'); mctx.clearRect(0,0,mv.width,mv.height);} if(rt) rt.innerHTML=''; return }
-        selectedId=c.id;
-        const name=(c?.name)||(Archetypes[c?.type]?.name)||(c?.type)||'Unknown';
-        el.innerHTML='<div style="display:flex; align-items:center; gap:8px;">'+
-            '<div style="width:14px;height:14px;border-radius:50%;border:2px solid #fff; background:'+c.color+'"></div>'+
-            '<div>'+
-            '<b>'+name+'</b> <span class="small">(#'+c.id+')</span><br/>'+
-            '<span class="small italic">Species: '+(c.species||'—')+'</span><br/>'+
-            '<span class="small">Gen '+c.gen+' • Age '+c.age+'</span>'+
-            '</div>'+
-            '</div>'+
-            '<div style="margin-top:6px" class="small">Parent: '+(c.parent??'—')+' • Kids: '+c.kids.length+'</div>';
-        function bar(label,val){ const w=Math.round(100*clamp(val,0,1)); return '<div class="stat"><div style="display:flex; justify-content:space-between"><span>'+label+'</span><span>'+w+'%</span></div><div style="height:8px;background:#0c1426;border-radius:999px;margin-top:6px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:linear-gradient(90deg, var(--accent), var(--accent-2))"></div></div></div>' }
-        stats.innerHTML = bar('Water Need', c.traits.water_need) + bar('Light Use', c.traits.light_use) + bar('Photosymbiosis', c.traits.photosym) + bar('Transport', c.traits.transport) + bar('Predation', c.traits.predation) + bar('Defense', c.traits.defense) + bar('Spore Rate', c.traits.spore) + bar('Flow', c.traits.flow);
-        refreshInspectorRealtime(true);
-    }
-    function refreshInspectorRealtime(force=false){
-        const rt=document.getElementById('rtStats'); if(!rt) return;
-        if(!selectedId){ rt.innerHTML=''; return; }
-        const col = World.colonies.find(c=>c.id===selectedId); if(!col){ rt.innerHTML=''; return; }
-        let tiles=0, mass=0, fit=0, minFit=1, maxFit=0;
-        for(let i=0;i<World.tiles.length;i++){ if(World.tiles[i]===col.id){ tiles++; mass += World.biomass[i]; const x=(i%World.W), y=Math.floor(i/World.W); const s=suitabilityAt(col,x,y); fit+=s; minFit=Math.min(minFit,s); maxFit=Math.max(maxFit,s);} }
-        fit = tiles? fit/tiles : 0;
-        rt.innerHTML = ''
-            + '<div class="kv"><div class="k">Tiles</div><div class="v">'+tiles+'</div><div class="k">Mass</div><div class="v">'+mass.toFixed(2)+'</div></div>'
-            + '<div class="kv"><div class="k">Avg Suit</div><div class="v">'+fit.toFixed(2)+'</div><div class="k">Fit Range</div><div class="v">'+minFit.toFixed(2)+'–'+maxFit.toFixed(2)+'</div></div>';
-        // mini view
-        const mv=document.getElementById('miniView'); const mctx=mv.getContext('2d'); mctx.clearRect(0,0,mv.width,mv.height);
-        mctx.fillStyle='#0a1326'; mctx.fillRect(0,0,mv.width,mv.height);
-        mctx.fillStyle='#9fb4ff';
-        const sx = mv.width/World.W, sy = mv.height/World.H;
-        for(let i=0;i<World.tiles.length;i++){ if(World.tiles[i]===col.id){ const x=(i%World.W), y=Math.floor(i/World.H); /* bug fix: wrong divisor */ } }
-        for(let i=0;i<World.tiles.length;i++){ if(World.tiles[i]===col.id){ const x=(i%World.W), y=Math.floor(i/World.W); mctx.globalAlpha=0.8; mctx.fillRect(x*sx, y*sy, Math.max(1,sx), Math.max(1,sy)); } }
-    }
-
-    /* ===== Events ===== */
-    const canvasEl = document.getElementById('canvas');
-    canvasEl.addEventListener('mousemove', (e)=>{
-        const rect=canvasEl.getBoundingClientRect();
-        const x=Math.floor((e.clientX-rect.left)/viewScale), y=Math.floor((e.clientY-rect.top)/viewScale);
-        if(inBounds(x,y)){ World.hover={x,y}; } else { World.hover={x:-1,y:-1}; }
-        needRedraw=true;
-    });
-    canvasEl.addEventListener('mouseleave', ()=>{World.hover={x:-1,y:-1}; needRedraw=true;});
-    let spawnSelectedEl=null, spawnPending=null;
-    Array.from(document.querySelectorAll('[data-spawn]')).forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-            if(spawnSelectedEl===btn){ btn.classList.remove('spawn-active'); spawnSelectedEl=null; spawnPending=null; return; }
-            if(spawnSelectedEl){ spawnSelectedEl.classList.remove('spawn-active'); }
-            spawnSelectedEl=btn; btn.classList.add('spawn-active'); spawnPending = btn.getAttribute('data-spawn');
-        });
-    });
-    canvasEl.addEventListener('click', (e)=>{
-        const rect=canvasEl.getBoundingClientRect();
-        const x=Math.floor((e.clientX-rect.left)/viewScale), y=Math.floor((e.clientY-rect.top)/viewScale);
-        if(!inBounds(x,y)) return;
-        if(spawnPending){
-            const created=newColony(spawnPending, x, y, null);
-            if(created){ refreshLegend(); updateInspector(created); }
-            return;
-        }
-        const c = colonyAtCanvas((e.clientX-rect.left), (e.clientY-rect.top));
-        if(c){ updateInspector(c); } else { updateInspector(null); }
-    });
-    ['ovHumidity','ovLight','ovNutrient','ovWater','ovTrail'].forEach(id=>{ document.getElementById(id).addEventListener('change', ()=>{needRedraw=true}); });
-    document.getElementById('speed').addEventListener('input', (e)=>{ World.speed=parseFloat(e.target.value) });
-    document.getElementById('mutRate').addEventListener('input', (e)=>{ World.mutationRate=parseFloat(e.target.value) });
-    document.getElementById('capacity').addEventListener('input', (e)=>{ World.capacity=parseFloat(e.target.value) });
-    document.getElementById('btnPause').addEventListener('click', playPause);
-    document.getElementById('btnStep').addEventListener('click', ()=>{ stepping=true; World.paused=true; document.getElementById('btnPause').textContent='▶️ Play' });
-    document.getElementById('btnReset').addEventListener('click', reset);
-    document.getElementById('btnScreenshot').addEventListener('click', savePNG);
-    document.getElementById('btnExport').addEventListener('click', saveJSON);
-    document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('fileImport').click());
-    document.getElementById('fileImport').addEventListener('change', loadJSON);
-    document.addEventListener('keydown', (e)=>{
-        if(e.key==='Escape'){ if(spawnSelectedEl){ spawnSelectedEl.classList.remove('spawn-active'); spawnSelectedEl=null; spawnPending=null; } }
-        if(e.code==='Space'){ e.preventDefault(); stepping=true; World.paused=true; document.getElementById('btnPause').textContent='▶️ Play' }
-        if(e.key==='p' || e.key==='P'){ playPause() }
-        if(e.key==='r' || e.key==='R'){ reset() }
-        if(e.key==='s' || e.key==='S'){ savePNG() }
-    });
-
-    /* ===== Legend & Misc ===== */
-    function refreshLegend(){
-        const legend=document.getElementById('legend');
-        legend.innerHTML='';
-        const sorted=[...World.colonies].slice(-10).reverse();
-        for(const c of sorted){
-            const chip=document.createElement('div'); chip.className='chip';
-            const d=document.createElement('div'); d.className='dot'; d.style.background=c.color; chip.appendChild(d);
-            const label = (c.species||c.name||Archetypes[c.type]?.name||c.type||'Unknown') + ' #' + c.id;
-            chip.appendChild(document.createTextNode(label));
-            legend.appendChild(chip);
-        }
-    }
-    function savePNG(){
-        const a = document.createElement('a'); a.download = 'slimeworld.png'; a.href = canvas.toDataURL('image/png'); a.click();
-    }
-    function saveJSON(){
-        const data = { W:World.W, H:World.H, env:{humidity:Array.from(World.env.humidity), light:Array.from(World.env.light), nutrient:Array.from(World.env.nutrient), water:Array.from(World.env.water)}, tiles:Array.from(World.tiles), biomass:Array.from(World.biomass), colonies:World.colonies, nextId:World.nextId, tick:World.tick };
-        const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
-        const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='slimeworld_save.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    }
-    function loadJSON(e){
-        const file = e.target.files[0]; if(!file) return; const reader=new FileReader();
-        reader.onload = ()=>{
-            try{
-                const data = JSON.parse(reader.result);
-                const sizeStr = data.W+'x'+data.H; setupWorld(1337, sizeStr);
-                World.env.humidity.set(data.env.humidity); World.env.light.set(data.env.light); World.env.nutrient.set(data.env.nutrient); World.env.water.set(data.env.water);
-                World.tiles.set(data.tiles); World.biomass.set(data.biomass);
-                World.colonies = data.colonies.map(c => ({...c, pattern:createPatternForColony(c)}));
-                World.nextId = data.nextId; World.tick = data.tick;
-                refreshLegend(); draw(); notify('Loaded save','warn',1000);
-            }catch(err){ console.error(err); notify('Load failed','error',2000); }
-        };
-        reader.readAsText(file);
-    }
-
-    /* ===== Init ===== */
-    function run(){
-        const seed = parseInt(document.getElementById('seed').value||'1337',10);
-        const size = document.getElementById('worldSize').value;
-        setupWorld(seed, size);
-        resize();
-        requestAnimationFrame(loop);
-    }
-    run();
-
-    /* ===== Diagnostics (lightweight) ===== */
-    function runTests(){
-        const out=[];
-        // names
-        out.push(Archetypes.MAT?.name ? '✅ Archetypes have names' : '❌ Archetype names');
-        // newColony type guard
-        const before=World.nextId;
-        const bogus=newColony('BOGUS',0,0,null);
-        out.push((bogus===null) ? '✅ newColony invalid type returns null' : '❌ newColony invalid guard');
-        // valid colony creates tile ownership
-        const c1=newColony('MAT', 0,0,null);
-        out.push(World.tiles[idx(0,0)]===c1.id ? '✅ newColony creates colonies for valid types' : '❌ newColony creates colonies for valid types -> tile not owned');
-        // TypeBehavior profiles present
-        out.push(TypeBehavior.CORD?.senseR ? '✅ TypeBehavior profiles present' : '❌ TypeBehavior profiles present');
-        // Slime diffusion+evap stability
-        const T0 = Slime.trail.reduce((a,v)=>a+v,0);
-        Slime.diffuseEvaporate();
-        const T1 = Slime.trail.reduce((a,v)=>a+v,0);
-        out.push(Number.isFinite(T1) ? '✅ Slime diffusion+evap behaves' : '❌ Slime diffusion+evap behaves -> NaN');
-        // Suitability monotonic chemo (left-center-right on flat fields w/ nutrient gradient)
-        const tmpCol = {id:undefined, type:'MAT', traits:Archetypes.MAT.base};
-        const i = Math.floor(World.H/2);
-        const saveN = World.env.nutrient.slice();
-        for(let x=0;x<World.W;x++){ World.env.nutrient[idx(x,i)] = x/World.W; }
-        const L=suitabilityAt(tmpCol, Math.floor(World.W*0.25), i);
-        const C=suitabilityAt(tmpCol, Math.floor(World.W*0.5), i);
-        const R=suitabilityAt(tmpCol, Math.floor(World.W*0.75), i);
-        out.push((L<=C && C<=R) ? '✅ Suitability follows nutrient+trail chemo' : `❌ Suitability follows nutrient+trail chemo -> Not monotonic: L=${L.toFixed(3)} C=${C.toFixed(3)} R=${R.toFixed(3)}`);
-        World.env.nutrient.set(saveN);
-        // Simulation loop tick
-        const tick0=World.tick; stepEcosystem(); out.push((World.tick>tick0)?'✅ Simulation loop advances tick':'❌ Simulation loop did not advance');
-        document.getElementById('testResults').innerText = out.join('\\n');
-    }
-    document.getElementById('btnTests').addEventListener('click', runTests);
-    document.getElementById('btnReseed').addEventListener('click', ()=>{ buildEnvironment(); Slime.clear(); notify('Environment reseeded','warn',900); draw(); });
-    document.getElementById('btnShake').addEventListener('click', ()=>{ for(let i=0;i<World.env.humidity.length;i++){ World.env.humidity[i] = clamp(World.env.humidity[i] + randRange(World.rng,-0.2,0.25), 0, 1); World.env.light[i] = clamp(World.env.light[i] + randRange(World.rng,-0.15,0.2), 0, 1); World.env.nutrient[i] = clamp(World.env.nutrient[i] + randRange(World.rng,-0.1,0.3), 0, 1); } notify('Seasonal pulse applied','warn',900); draw(); });
-    document.getElementById('btnOverlayCollapse').addEventListener('click', ()=>{ const el=document.getElementById('overlay'); el.classList.toggle('collapsed'); });
-
-</script>
+  <script src="app.js"></script>
 </body>
 </html>
