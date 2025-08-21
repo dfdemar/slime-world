@@ -1,0 +1,19 @@
+## Jetbrains
+.idea/
+*.iml
+
+## Eclipse
+.settings
+.classpath
+.project
+
+## Build artifacts
+node_modules/
+.vite/
+
+## Mac OS X
+.DS_Store
+*/.DS_Store
+
+## Logs
+/log**
