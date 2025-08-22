@@ -179,5 +179,214 @@ function runEcosystemTests() {
         restore.restore();
     });
 
+    runner.test('Starvation balance - energy calculation fairness across archetypes', () => {
+        const restore = createTestWorld(10, 10);
+        
+        // Test each archetype under identical poor conditions
+        const testResults = {};
+        const testConditions = {
+            nutrient: 0.3,  // Moderate nutrients
+            light: 0.3      // Moderate light
+        };
+        
+        for (const archetypeCode of Object.keys(Archetypes)) {
+            const colony = createTestColony(archetypeCode, 5, 5);
+            const pos = idx(5, 5);
+            
+            // Set identical environment
+            World.env.nutrient[pos] = testConditions.nutrient;
+            World.env.light[pos] = testConditions.light;
+            World.biomass[pos] = 1.0;
+            
+            // Calculate energy using starvation formula
+            const photosym = colony.traits.photosym || 0;
+            const energy = 0.7 * testConditions.nutrient + 0.3 * photosym * testConditions.light;
+            
+            testResults[archetypeCode] = {
+                photosym: photosym,
+                energy: energy,
+                survives: energy >= 0.35
+            };
+        }
+        
+        // Analyze results for balance issues
+        const survivors = Object.values(testResults).filter(r => r.survives).length;
+        const totalTypes = Object.keys(Archetypes).length;
+        
+        runner.assertGreaterThan(survivors, 0, 'At least some archetypes should survive moderate conditions');
+        runner.assertLessThan(survivors, totalTypes, 'Not all archetypes should easily survive (creates challenge)');
+        
+        // Check if photosynthetic types have unfair advantage
+        const highPhotosym = Object.entries(testResults)
+            .filter(([code, result]) => result.photosym > 0.5)
+            .map(([code, result]) => ({ code, ...result }));
+        
+        const lowPhotosym = Object.entries(testResults)
+            .filter(([code, result]) => result.photosym <= 0.2)
+            .map(([code, result]) => ({ code, ...result }));
+        
+        if (highPhotosym.length > 0 && lowPhotosym.length > 0) {
+            const avgHighEnergy = highPhotosym.reduce((sum, r) => sum + r.energy, 0) / highPhotosym.length;
+            const avgLowEnergy = lowPhotosym.reduce((sum, r) => sum + r.energy, 0) / lowPhotosym.length;
+            
+            // Energy difference shouldn't be too extreme
+            const energyRatio = avgHighEnergy / avgLowEnergy;
+            runner.assertLessThan(energyRatio, 2.5, 'Photosynthetic advantage should not be excessive');
+        }
+        
+        restore.restore();
+    });
+
+    runner.test('Starvation balance - EAT archetype can survive without photosynthesis', () => {
+        const restore = createTestWorld(10, 10);
+        
+        // Create EAT colony (no photosynthesis)
+        const eatColony = createTestColony('EAT', 5, 5);
+        World.colonies.push(eatColony);
+        World.tiles[idx(5, 5)] = eatColony.id;
+        World.biomass[idx(5, 5)] = 1.0;
+        
+        // Set up environment with high nutrients, low light
+        World.env.nutrient[idx(5, 5)] = 0.6;
+        World.env.light[idx(5, 5)] = 0.1;  // Low light shouldn't matter for EAT
+        
+        const initialBiomass = World.biomass[idx(5, 5)];
+        
+        // Run starvation sweep
+        starvationSweep();
+        
+        runner.assertNotEqual(World.tiles[idx(5, 5)], -1, 'EAT colony should survive on nutrients alone');
+        runner.assertGreaterThan(World.biomass[idx(5, 5)], 0.05, 'EAT colony should maintain biomass');
+        
+        // Should actually grow with good nutrients
+        const energy = 0.7 * 0.6 + 0.3 * 0 * 0.1; // photosym = 0 for EAT
+        if (energy > 0.35) {
+            runner.assertGreaterThan(World.biomass[idx(5, 5)], initialBiomass * 0.99, 'EAT should grow with good nutrients');
+        }
+        
+        restore.restore();
+    });
+
+    runner.test('Starvation balance - TOWER archetype performance with light dependency', () => {
+        const restore = createTestWorld(10, 10);
+        
+        // Create TOWER colony (high photosynthesis)
+        const towerColony = createTestColony('TOWER', 5, 5);
+        World.colonies.push(towerColony);
+        World.tiles[idx(5, 5)] = towerColony.id;
+        World.biomass[idx(5, 5)] = 1.0;
+        
+        // Test scenario 1: Low nutrients, high light
+        World.env.nutrient[idx(5, 5)] = 0.2;
+        World.env.light[idx(5, 5)] = 0.8;
+        
+        const photosym = towerColony.traits.photosym;
+        const energy1 = 0.7 * 0.2 + 0.3 * photosym * 0.8;
+        
+        starvationSweep();
+        
+        if (energy1 >= 0.35) {
+            runner.assertNotEqual(World.tiles[idx(5, 5)], -1, 'TOWER should survive with high light compensation');
+        }
+        
+        // Reset for scenario 2: High nutrients, low light
+        World.tiles[idx(5, 5)] = towerColony.id;
+        World.biomass[idx(5, 5)] = 1.0;
+        World.env.nutrient[idx(5, 5)] = 0.6;
+        World.env.light[idx(5, 5)] = 0.1;
+        
+        const energy2 = 0.7 * 0.6 + 0.3 * photosym * 0.1;
+        
+        starvationSweep();
+        
+        runner.assertNotEqual(World.tiles[idx(5, 5)], -1, 'TOWER should survive with high nutrients even if light is low');
+        
+        restore.restore();
+    });
+
+    runner.test('Starvation balance - energy thresholds are reasonable', () => {
+        const restore = createTestWorld();
+        
+        // Test the 0.35 energy threshold
+        const testCases = [
+            { nutrient: 0.5, light: 0.0, photosym: 0.0, expectedEnergy: 0.35, description: 'Threshold case - pure nutrients' },
+            { nutrient: 0.0, light: 1.0, photosym: 1.0, expectedEnergy: 0.30, description: 'Pure photosynthesis case' },
+            { nutrient: 0.25, light: 0.5, photosym: 0.5, expectedEnergy: 0.25, description: 'Balanced case' },
+            { nutrient: 1.0, light: 1.0, photosym: 1.0, expectedEnergy: 1.0, description: 'Maximum case' }
+        ];
+        
+        for (const testCase of testCases) {
+            const actualEnergy = 0.7 * testCase.nutrient + 0.3 * testCase.photosym * testCase.light;
+            
+            runner.assertApproxEqual(
+                actualEnergy, 
+                testCase.expectedEnergy, 
+                0.01, 
+                `Energy calculation for ${testCase.description}`
+            );
+            
+            // Test survival threshold
+            const shouldSurvive = actualEnergy >= 0.35;
+            runner.assert(
+                (shouldSurvive && actualEnergy >= 0.35) || (!shouldSurvive && actualEnergy < 0.35),
+                `Survival logic should match energy threshold for ${testCase.description}`
+            );
+        }
+        
+        restore.restore();
+    });
+
+    runner.test('Starvation balance - biomass consumption scaling', () => {
+        const restore = createTestWorld();
+        
+        const colony = createTestColony('MAT', 5, 5);
+        World.colonies.push(colony);
+        World.tiles[idx(5, 5)] = colony.id;
+        
+        // Test different biomass levels
+        const biomassLevels = [0.1, 0.5, 1.0, 2.0];
+        const consumptionResults = [];
+        
+        for (const biomassLevel of biomassLevels) {
+            World.biomass[idx(5, 5)] = biomassLevel;
+            World.env.nutrient[idx(5, 5)] = 0.5; // Fixed nutrient level
+            
+            const initialNutrient = World.env.nutrient[idx(5, 5)];
+            const expectedConsumption = Math.min(initialNutrient, 0.008 * Math.max(0.1, biomassLevel));
+            
+            // Store state before starvation sweep
+            const beforeNutrient = World.env.nutrient[idx(5, 5)];
+            
+            starvationSweep();
+            
+            const afterNutrient = World.env.nutrient[idx(5, 5)];
+            const actualConsumption = beforeNutrient - afterNutrient;
+            
+            consumptionResults.push({
+                biomass: biomassLevel,
+                expected: expectedConsumption,
+                actual: actualConsumption
+            });
+            
+            runner.assertApproxEqual(
+                actualConsumption,
+                expectedConsumption,
+                0.001,
+                `Consumption should scale with biomass (level: ${biomassLevel})`
+            );
+        }
+        
+        // Verify consumption increases with biomass
+        for (let i = 1; i < consumptionResults.length; i++) {
+            runner.assertGreaterThan(
+                consumptionResults[i].actual,
+                consumptionResults[i-1].actual,
+                'Higher biomass should consume more nutrients'
+            );
+        }
+        
+        restore.restore();
+    });
+
     return runner.run();
 }

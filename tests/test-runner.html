@@ -99,6 +99,7 @@
         <button id="runColonyTests">Run Colony Tests</button>
         <button id="runEcosystemTests">Run Ecosystem Tests</button>
         <button id="runEnvironmentTests">Run Environment Tests</button>
+        <button id="runBugFixTests">Run Bug Fix Tests</button>
         <button id="clearResults">Clear Results</button>
     </div>
 
@@ -126,6 +127,7 @@
     <script src="test-colonies.js"></script>
     <script src="test-ecosystem.js"></script>
     <script src="test-environment.js"></script>
+    <script src="test-bugfixes.js"></script>
 
     <script>
         // Test runner UI
@@ -199,7 +201,8 @@
                 { name: 'Core Tests', fn: runCoreTests },
                 { name: 'Colony Tests', fn: runColonyTests },
                 { name: 'Ecosystem Tests', fn: runEcosystemTests },
-                { name: 'Environment Tests', fn: runEnvironmentTests }
+                { name: 'Environment Tests', fn: runEnvironmentTests },
+                { name: 'Bug Fix Tests', fn: runBugFixTests }
             ];
 
             for (const suite of testSuites) {
@@ -219,6 +222,7 @@
         document.getElementById('runColonyTests').addEventListener('click', () => runTestSuite('Colony Tests', runColonyTests).then(showSummary));
         document.getElementById('runEcosystemTests').addEventListener('click', () => runTestSuite('Ecosystem Tests', runEcosystemTests).then(showSummary));
         document.getElementById('runEnvironmentTests').addEventListener('click', () => runTestSuite('Environment Tests', runEnvironmentTests).then(showSummary));
+        document.getElementById('runBugFixTests').addEventListener('click', () => runTestSuite('Bug Fix Tests', runBugFixTests).then(showSummary));
         document.getElementById('clearResults').addEventListener('click', clearResults);
     </script>
 </body>

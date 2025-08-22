@@ -45,7 +45,6 @@ function refreshInspectorRealtime(force=false){
     mctx.fillStyle='#0a1326'; mctx.fillRect(0,0,mv.width,mv.height);
     mctx.fillStyle='#9fb4ff';
     const sx = mv.width/World.W, sy = mv.height/World.H;
-    for(let i=0;i<World.tiles.length;i++){ if(World.tiles[i]===col.id){ const x=(i%World.W), y=Math.floor(i/World.H); /* bug fix: wrong divisor */ } }
     for(let i=0;i<World.tiles.length;i++){ if(World.tiles[i]===col.id){ const x=(i%World.W), y=Math.floor(i/World.W); mctx.globalAlpha=0.8; mctx.fillRect(x*sx, y*sy, Math.max(1,sx), Math.max(1,sy)); } }
 }
 
