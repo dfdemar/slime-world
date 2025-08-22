@@ -200,7 +200,7 @@ class Archetype {
     calculateFitness(traits, environment, position) {
         let totalFitness = 0;
         let weightSum = 0;
-        
+
         for (const [traitName, trait] of Object.entries(TraitRegistry)) {
             if (traits.hasOwnProperty(traitName)) {
                 const fitness = trait.calculateFitness(traits[traitName], environment, position);
@@ -209,7 +209,7 @@ class Archetype {
                 weightSum += weight;
             }
         }
-        
+
         return weightSum > 0 ? totalFitness / weightSum : 0;
     }
 
@@ -331,7 +331,7 @@ function createModularColony(archetypeCode, x, y, parent = null) {
         return null;
     }
 
-    const traits = parent ? 
+    const traits = parent ?
         archetype.mutateTraits(parent.traits, World.mutationRate, World.rng) :
         archetype.createTraits();
 
@@ -361,26 +361,26 @@ function createModularColony(archetypeCode, x, y, parent = null) {
 function calculateModularSuitability(colony, x, y) {
     const position = idx(x, y);
     const environment = World.env;
-    
+
     // Use the colony's archetype to calculate fitness
     const baseFitness = colony.archetype.calculateFitness(colony.traits, environment, position);
-    
+
     // Apply chemical trail influence
     const trailSaturation = Slime.sat(Slime.trail[position]);
     const behaviors = colony.archetype.behaviors;
-    const chemicalFitness = (behaviors.nutrientW * environment.nutrient[position] + 
-                            behaviors.trailW * trailSaturation) / 
-                           (behaviors.nutrientW + behaviors.trailW);
-    
+    const chemicalFitness = (behaviors.nutrientW * environment.nutrient[position] +
+            behaviors.trailW * trailSaturation) /
+        (behaviors.nutrientW + behaviors.trailW);
+
     // Combine base fitness with chemical signals
     const combinedFitness = 0.6 * baseFitness + 0.4 * chemicalFitness;
-    
+
     // Apply capacity pressure
     const density = World.biomass[position];
     const capPenalty = -0.35 * clamp((density - World.capacity), 0, 1);
-    
+
     // Apply type pressure
     const pressure = World.typePressure[colony.type] ?? 1;
-    
+
     return clamp(combinedFitness * pressure + capPenalty, 0, 1);
 }

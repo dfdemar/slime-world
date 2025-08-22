@@ -40,12 +40,12 @@ class TowerArchetype extends Archetype {
 
     calculateFitness(traits, environment, position) {
         let fitness = super.calculateFitness(traits, environment, position);
-        
+
         // Tower penalty for water tiles
         if (environment.water[position]) {
             fitness += this.behaviors.waterPenalty || 0;
         }
-        
+
         return clamp(fitness, 0, 1);
     }
 }
@@ -90,14 +90,14 @@ class FloaterArchetype extends Archetype {
 
     calculateFitness(traits, environment, position) {
         let fitness = super.calculateFitness(traits, environment, position);
-        
+
         // Floater bonus/penalty for water
         if (environment.water[position]) {
             fitness += this.behaviors.waterAffinity || 0;
         } else {
             fitness -= 0.08; // Penalty for non-water tiles
         }
-        
+
         return clamp(fitness, 0, 1);
     }
 }
@@ -142,11 +142,11 @@ class EngulferArchetype extends Archetype {
 
     calculateFitness(traits, environment, position) {
         let fitness = super.calculateFitness(traits, environment, position);
-        
+
         // Engulfer prefers areas with higher biomass density (more prey)
         const density = World.biomass[position];
         fitness += 0.1 * clamp(density - 0.5, 0, 1);
-        
+
         return clamp(fitness, 0, 1);
     }
 }
@@ -191,11 +191,11 @@ class ScoutArchetype extends Archetype {
 
     calculateFitness(traits, environment, position) {
         let fitness = super.calculateFitness(traits, environment, position);
-        
+
         // Scout bonus for nutrient-rich areas
         const nutrientLevel = environment.nutrient[position];
         fitness += 0.15 * nutrientLevel;
-        
+
         return clamp(fitness, 0, 1);
     }
 }
@@ -233,7 +233,7 @@ class TraitFactory {
             `Synergistic interaction with ${partnerTraits.join(', ')}`,
             (value, env, pos, colony) => {
                 if (!colony || !colony.traits) return value;
-                
+
                 let synergy = 0;
                 for (const partner of partnerTraits) {
                     if (colony.traits[partner]) {
@@ -269,9 +269,9 @@ class ArchetypeEvolution {
     static createHybrid(parent1Type, parent2Type, traits1, traits2) {
         const arch1 = ModularArchetypes[parent1Type];
         const arch2 = ModularArchetypes[parent2Type];
-        
+
         if (!arch1 || !arch2) return null;
-        
+
         // Create hybrid traits by averaging
         const hybridTraits = {};
         for (const traitName of Object.keys(TraitRegistry)) {
@@ -279,7 +279,7 @@ class ArchetypeEvolution {
             const val2 = traits2[traitName] || 0.5;
             hybridTraits[traitName] = clamp((val1 + val2) / 2, 0, 1);
         }
-        
+
         // Create hybrid behaviors
         const hybridBehaviors = {};
         for (const behaviorName of ['trailW', 'nutrientW', 'deposit', 'senseR']) {
@@ -287,7 +287,7 @@ class ArchetypeEvolution {
             const val2 = arch2.behaviors[behaviorName] || 0.5;
             hybridBehaviors[behaviorName] = (val1 + val2) / 2;
         }
-        
+
         return new Archetype(
             `${parent1Type}_${parent2Type}`,
             `${arch1.name} × ${arch2.name} Hybrid`,
@@ -300,13 +300,13 @@ class ArchetypeEvolution {
     static createMutant(baseType, mutationStrength = 0.3) {
         const baseArch = ModularArchetypes[baseType];
         if (!baseArch) return null;
-        
+
         const mutantTraits = {};
         for (const [traitName, value] of Object.entries(baseArch.traitValues)) {
             const mutation = randRange(World.rng, -mutationStrength, mutationStrength);
             mutantTraits[traitName] = clamp(value + mutation, 0, 1);
         }
-        
+
         return new Archetype(
             `${baseType}_MUT`,
             `${baseArch.name} Mutant`,

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1" name="viewport"/>
     <title>Slimeworld Test Runner</title>
     <style>
         body {
@@ -12,6 +12,7 @@
             padding: 20px;
             background: #f5f5f5;
         }
+
         .header {
             background: #2c3e50;
             color: white;
@@ -19,6 +20,7 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+
         .test-section {
             background: white;
             border: 1px solid #ddd;
@@ -26,6 +28,7 @@
             margin-bottom: 20px;
             padding: 20px;
         }
+
         .test-results {
             font-family: monospace;
             background: #f8f9fa;
@@ -37,6 +40,7 @@
             max-height: 400px;
             overflow-y: auto;
         }
+
         .summary {
             background: #e8f5e8;
             border: 1px solid #4caf50;
@@ -44,10 +48,12 @@
             padding: 15px;
             margin-top: 20px;
         }
+
         .summary.failed {
             background: #ffe8e8;
             border-color: #f44336;
         }
+
         button {
             background: #3498db;
             color: white;
@@ -58,13 +64,16 @@
             margin-right: 10px;
             margin-bottom: 10px;
         }
+
         button:hover {
             background: #2980b9;
         }
+
         button:disabled {
             background: #bdc3c7;
             cursor: not-allowed;
         }
+
         .status {
             display: inline-block;
             padding: 4px 8px;
@@ -72,14 +81,17 @@
             font-size: 12px;
             font-weight: bold;
         }
+
         .status.passed {
             background: #4caf50;
             color: white;
         }
+
         .status.failed {
             background: #f44336;
             color: white;
         }
+
         .status.running {
             background: #ff9800;
             color: white;
@@ -87,139 +99,178 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Slimeworld Evolution Simulator - Test Suite</h1>
-        <p>Comprehensive tests for all simulation components</p>
-    </div>
+<div class="header">
+    <h1>Slimeworld Evolution Simulator - Test Suite</h1>
+    <p>Comprehensive tests for all simulation components</p>
+</div>
 
-    <div class="test-section">
-        <h2>Test Controls</h2>
-        <button id="runAllTests">Run All Tests</button>
-        <button id="runCoreTests">Run Core Tests</button>
-        <button id="runColonyTests">Run Colony Tests</button>
-        <button id="runEcosystemTests">Run Ecosystem Tests</button>
-        <button id="runEnvironmentTests">Run Environment Tests</button>
-        <button id="clearResults">Clear Results</button>
-    </div>
+<div class="test-section">
+    <h2>Test Controls</h2>
+    <button id="runAllTests">Run All Tests</button>
+    <button id="runCoreTests">Run Core Tests</button>
+    <button id="runColonyTests">Run Colony Tests</button>
+    <button id="runEcosystemTests">Run Ecosystem Tests</button>
+    <button id="runEnvironmentTests">Run Environment Tests</button>
+    <button id="runBugFixTests">Run Bug Fix Tests</button>
+    <button id="clearResults">Clear Results</button>
+</div>
 
-    <div class="test-section">
-        <h2>Test Results</h2>
-        <div id="testResults" class="test-results">Click "Run All Tests" to begin testing...</div>
-    </div>
+<div class="test-section">
+    <h2>Test Results</h2>
+    <div class="test-results" id="testResults">Click "Run All Tests" to begin testing...</div>
+</div>
 
-    <div id="summary" class="summary" style="display: none;">
-        <h3>Test Summary</h3>
-        <div id="summaryContent"></div>
-    </div>
+<div class="summary" id="summary" style="display: none;">
+    <h3>Test Summary</h3>
+    <div id="summaryContent"></div>
+</div>
 
-    <!-- Load all the source files -->
-    <script src="../src/js/utils.js"></script>
-    <script src="../src/js/archetypes.js"></script>
-    <script src="../src/js/world.js"></script>
-    <script src="../src/js/environment.js"></script>
-    <script src="../src/js/colonies.js"></script>
-    <script src="../src/js/ecosystem.js"></script>
+<!-- Load all the source files -->
+<script>
+    // Add mock elements for tests that need DOM access
+    function createMockElement() {
+        return {
+            innerHTML: '',
+            textContent: '',
+            className: '',
+            style: {display: 'none'},
+            classList: {
+                add: () => {
+                }, remove: () => {
+                }
+            },
+            appendChild: () => {
+            },
+            getContext: () => ({
+                clearRect: () => {
+                },
+                fillRect: () => {
+                },
+                fillStyle: null,
+                globalAlpha: 1
+            })
+        };
+    }
 
-    <!-- Load test files -->
-    <script src="test-utils.js"></script>
-    <script src="test-core.js"></script>
-    <script src="test-colonies.js"></script>
-    <script src="test-ecosystem.js"></script>
-    <script src="test-environment.js"></script>
+    // Mock common DOM elements
+    const originalGetElementById = document.getElementById;
+    document.getElementById = function (id) {
+        const element = originalGetElementById.call(this, id);
+        return element || createMockElement();
+    };
+</script>
+<script src="../src/js/utils.js"></script>
+<script src="../src/js/archetypes.js"></script>
+<script src="../src/js/world.js"></script>
+<script src="../src/js/environment.js"></script>
+<script src="../src/js/colonies.js"></script>
+<script src="../src/js/ecosystem.js"></script>
+<script src="../src/js/renderer.js"></script>
+<script src="../src/js/ui.js"></script>
 
-    <script>
-        // Test runner UI
-        const resultsEl = document.getElementById('testResults');
-        const summaryEl = document.getElementById('summary');
-        const summaryContentEl = document.getElementById('summaryContent');
+<!-- Load test files -->
+<script src="test-utils.js"></script>
+<script src="test-core.js"></script>
+<script src="test-colonies.js"></script>
+<script src="test-ecosystem.js"></script>
+<script src="test-environment.js"></script>
+<script src="test-bugfixes.js"></script>
 
-        function clearResults() {
-            resultsEl.textContent = 'Results cleared.';
-            summaryEl.style.display = 'none';
-        }
+<script>
+    // Test runner UI
+    const resultsEl = document.getElementById('testResults');
+    const summaryEl = document.getElementById('summary');
+    const summaryContentEl = document.getElementById('summaryContent');
 
-        function showStatus(message, status = 'running') {
-            resultsEl.innerHTML = `<span class="status ${status}">${status.toUpperCase()}</span> ${message}`;
-        }
+    function clearResults() {
+        resultsEl.textContent = 'Results cleared.';
+        summaryEl.style.display = 'none';
+    }
 
-        function appendResult(message) {
-            resultsEl.textContent += message + '\n';
-            resultsEl.scrollTop = resultsEl.scrollHeight;
-        }
+    function showStatus(message, status = 'running') {
+        resultsEl.innerHTML = `<span class="status ${status}">${status.toUpperCase()}</span> ${message}`;
+    }
 
-        function showSummary(results) {
-            const total = results.passed + results.failed;
-            const success = results.failed === 0;
-            
-            summaryEl.className = `summary ${success ? 'passed' : 'failed'}`;
-            summaryContentEl.innerHTML = `
+    function appendResult(message) {
+        resultsEl.textContent += message + '\n';
+        resultsEl.scrollTop = resultsEl.scrollHeight;
+    }
+
+    function showSummary(results) {
+        const total = results.passed + results.failed;
+        const success = results.failed === 0;
+
+        summaryEl.className = `summary ${success ? 'passed' : 'failed'}`;
+        summaryContentEl.innerHTML = `
                 <p><strong>Total Tests:</strong> ${total}</p>
                 <p><strong>Passed:</strong> ${results.passed}</p>
                 <p><strong>Failed:</strong> ${results.failed}</p>
                 ${results.failed > 0 ? `<p><strong>Errors:</strong></p><ul>${results.errors.map(e => `<li>${e.test}: ${e.error.message}</li>`).join('')}</ul>` : ''}
             `;
-            summaryEl.style.display = 'block';
+        summaryEl.style.display = 'block';
+    }
+
+    async function runTestSuite(name, testFunction) {
+        showStatus(`Running ${name}...`);
+
+        try {
+            // Redirect console.log to our results
+            const originalLog = console.log;
+            const originalError = console.error;
+
+            console.log = appendResult;
+            console.error = appendResult;
+
+            const results = await testFunction();
+
+            // Restore console
+            console.log = originalLog;
+            console.error = originalError;
+
+            return results;
+        } catch (error) {
+            appendResult(`Error running ${name}: ${error.message}`);
+            return {passed: 0, failed: 1, errors: [{test: name, error}]};
+        }
+    }
+
+    async function runAllTests() {
+        clearResults();
+        showStatus('Running all tests...');
+
+        const allResults = {
+            passed: 0,
+            failed: 0,
+            errors: []
+        };
+
+        const testSuites = [
+            {name: 'Core Tests', fn: runCoreTests},
+            {name: 'Colony Tests', fn: runColonyTests},
+            {name: 'Ecosystem Tests', fn: runEcosystemTests},
+            {name: 'Environment Tests', fn: runEnvironmentTests},
+            {name: 'Bug Fix Tests', fn: runBugFixTests}
+        ];
+
+        for (const suite of testSuites) {
+            const results = await runTestSuite(suite.name, suite.fn);
+            allResults.passed += results.passed;
+            allResults.failed += results.failed;
+            allResults.errors.push(...results.errors);
+            appendResult(''); // Add spacing
         }
 
-        async function runTestSuite(name, testFunction) {
-            showStatus(`Running ${name}...`);
-            
-            try {
-                // Redirect console.log to our results
-                const originalLog = console.log;
-                const originalError = console.error;
-                
-                console.log = appendResult;
-                console.error = appendResult;
-                
-                const results = await testFunction();
-                
-                // Restore console
-                console.log = originalLog;
-                console.error = originalError;
-                
-                return results;
-            } catch (error) {
-                appendResult(`Error running ${name}: ${error.message}`);
-                return { passed: 0, failed: 1, errors: [{ test: name, error }] };
-            }
-        }
+        showSummary(allResults);
+    }
 
-        async function runAllTests() {
-            clearResults();
-            showStatus('Running all tests...');
-            
-            const allResults = {
-                passed: 0,
-                failed: 0,
-                errors: []
-            };
-
-            const testSuites = [
-                { name: 'Core Tests', fn: runCoreTests },
-                { name: 'Colony Tests', fn: runColonyTests },
-                { name: 'Ecosystem Tests', fn: runEcosystemTests },
-                { name: 'Environment Tests', fn: runEnvironmentTests }
-            ];
-
-            for (const suite of testSuites) {
-                const results = await runTestSuite(suite.name, suite.fn);
-                allResults.passed += results.passed;
-                allResults.failed += results.failed;
-                allResults.errors.push(...results.errors);
-                appendResult(''); // Add spacing
-            }
-
-            showSummary(allResults);
-        }
-
-        // Event listeners
-        document.getElementById('runAllTests').addEventListener('click', runAllTests);
-        document.getElementById('runCoreTests').addEventListener('click', () => runTestSuite('Core Tests', runCoreTests).then(showSummary));
-        document.getElementById('runColonyTests').addEventListener('click', () => runTestSuite('Colony Tests', runColonyTests).then(showSummary));
-        document.getElementById('runEcosystemTests').addEventListener('click', () => runTestSuite('Ecosystem Tests', runEcosystemTests).then(showSummary));
-        document.getElementById('runEnvironmentTests').addEventListener('click', () => runTestSuite('Environment Tests', runEnvironmentTests).then(showSummary));
-        document.getElementById('clearResults').addEventListener('click', clearResults);
-    </script>
+    // Event listeners
+    document.getElementById('runAllTests').addEventListener('click', runAllTests);
+    document.getElementById('runCoreTests').addEventListener('click', () => runTestSuite('Core Tests', runCoreTests).then(showSummary));
+    document.getElementById('runColonyTests').addEventListener('click', () => runTestSuite('Colony Tests', runColonyTests).then(showSummary));
+    document.getElementById('runEcosystemTests').addEventListener('click', () => runTestSuite('Ecosystem Tests', runEcosystemTests).then(showSummary));
+    document.getElementById('runEnvironmentTests').addEventListener('click', () => runTestSuite('Environment Tests', runEnvironmentTests).then(showSummary));
+    document.getElementById('runBugFixTests').addEventListener('click', () => runTestSuite('Bug Fix Tests', runBugFixTests).then(showSummary));
+    document.getElementById('clearResults').addEventListener('click', clearResults);
+</script>
 </body>
 </html>

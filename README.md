@@ -2,7 +2,7 @@
 
 A sophisticated ecosystem simulation inspired by slime mold behavior, featuring emergent evolution, competitive dynamics, and adaptive traits. Watch colonies of different archetypes compete, cooperate, and evolve in a dynamic environment with realistic resource constraints.
 
-![Version](https://img.shields.io/badge/version-2.3-blue)
+![Version](https://img.shields.io/badge/version-2.4-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![HTML5](https://img.shields.io/badge/HTML5-Canvas-orange)
 
@@ -165,23 +165,50 @@ The simulation incorporates several biological and computational concepts:
 ### File Structure
 ```
 slime-world/
-├── index.html          # Complete simulation (HTML + CSS + JS)
-├── app.js              # Alternative implementation (unused)
-├── style.css           # External CSS (unused)
-├── README.md           # This documentation
-├── CLAUDE.md           # Development guidelines
-├── BUGS.md             # Known issues tracking
-└── LICENSE             # MIT license
+├── index.html              # Main application entry point
+├── src/
+│   ├── css/
+│   │   └── main.css        # Application styles
+│   └── js/
+│       ├── utils.js        # PRNG, helpers, noise generation
+│       ├── archetypes.js   # Colony type definitions
+│       ├── world.js        # Core world system and slime mechanics
+│       ├── environment.js  # Procedural world generation
+│       ├── colonies.js     # Colony creation and management
+│       ├── ecosystem.js    # Balance, starvation, and growth
+│       ├── renderer.js     # Canvas rendering and patterns
+│       ├── ui.js           # User interface and interactions
+│       ├── events.js       # Event listeners and initialization
+│       ├── diagnostics.js  # Testing and debugging functions
+│       └── main.js         # Application initialization
+├── tests/
+│   ├── test-runner.html    # Web-based test runner
+│   ├── test-utils.js       # Testing framework and utilities
+│   ├── test-core.js        # Core system tests
+│   ├── test-colonies.js    # Colony system tests
+│   ├── test-ecosystem.js   # Ecosystem and simulation tests
+│   ├── test-environment.js # Environment generation tests
+│   └── test-bugfixes.js    # Bug fix regression tests
+├── README.md               # This documentation
+├── CLAUDE.md               # Development guidelines
+├── BUGS.md                 # Known issues tracking
+├── CHANGELOG.md            # Project change history
+└── LICENSE                 # MIT license
 ```
 
 ### Testing
-Built-in diagnostic functions validate core mechanics:
-- `validateSlimeTrails()` - Trail diffusion and evaporation
-- `validateNutrientBalance()` - Resource consumption and regeneration
+Comprehensive test suite with web-based runner:
+- **Open `tests/test-runner.html`** for interactive test execution
+- **Core system tests** - PRNG, archetypes, and basic functionality
+- **Colony behavior tests** - Creation, mutation, and lifecycle validation
+- **Ecosystem tests** - Starvation balance, energy calculations, and expansion
+- **Environmental tests** - World generation and resource dynamics
+- **Bug fix tests** - Regression prevention and edge case validation
+- Built-in diagnostic functions: `validateSlimeTrails()`, `validateNutrientBalance()`
 - Browser console provides debugging access to World object
 
 ### Contributing
-See `CLAUDE.md` for development guidelines and architectural decisions. The codebase uses embedded JavaScript within HTML for maximum portability.
+See `CLAUDE.md` for development guidelines and architectural decisions. The codebase uses a modular JavaScript architecture organized into logical components for maintainability and testing.
 
 ## License
 
@@ -190,7 +217,3 @@ MIT License - see `LICENSE` file for details.
 ## Acknowledgments
 
 Inspired by the fascinating behavior of slime molds and the rich field of artificial life research. Special thanks to the biological systems that demonstrate how simple rules can generate complex, adaptive behaviors.
-
----
-
-*For technical details and development guidelines, see `CLAUDE.md`*
