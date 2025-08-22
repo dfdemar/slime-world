@@ -45,6 +45,12 @@ class TestRunner {
         }
     }
 
+    assertNotEqual(actual, expected, message) {
+        if (actual === expected) {
+            throw new Error(message || `Expected ${actual} to not equal ${expected}`);
+        }
+    }
+
     assertApproxEqual(actual, expected, tolerance = 0.001, message) {
         if (Math.abs(actual - expected) > tolerance) {
             throw new Error(message || `Expected ~${expected}, got ${actual} (tolerance: ${tolerance})`);
@@ -106,6 +112,7 @@ function createTestWorld(width = 32, height = 24) {
         nutrient: new Float32Array(width * height).fill(0.5),
         water: new Uint8Array(width * height).fill(0)
     };
+    World._nutrientNext = new Float32Array(width * height).fill(0);
     World.colonies = [];
     World.nextId = 1;
     World.tick = 0;
@@ -114,6 +121,11 @@ function createTestWorld(width = 32, height = 24) {
     
     Slime.trail = new Float32Array(width * height).fill(0);
     Slime.trailNext = new Float32Array(width * height).fill(0);
+    
+    // Mock notify function to prevent DOM errors during tests
+    if (typeof window !== 'undefined' && !window.notify) {
+        window.notify = () => {}; // No-op during tests
+    }
     
     return { restore: () => { World.W = oldW; World.H = oldH; } };
 }

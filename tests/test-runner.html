@@ -114,12 +114,40 @@
     </div>
 
     <!-- Load all the source files -->
+    <script>
+        // Add mock elements for tests that need DOM access
+        function createMockElement() {
+            return {
+                innerHTML: '',
+                textContent: '',
+                className: '',
+                style: { display: 'none' },
+                classList: { add: () => {}, remove: () => {} },
+                appendChild: () => {},
+                getContext: () => ({
+                    clearRect: () => {},
+                    fillRect: () => {},
+                    fillStyle: null,
+                    globalAlpha: 1
+                })
+            };
+        }
+        
+        // Mock common DOM elements
+        const originalGetElementById = document.getElementById;
+        document.getElementById = function(id) {
+            const element = originalGetElementById.call(this, id);
+            return element || createMockElement();
+        };
+    </script>
     <script src="../src/js/utils.js"></script>
     <script src="../src/js/archetypes.js"></script>
     <script src="../src/js/world.js"></script>
     <script src="../src/js/environment.js"></script>
     <script src="../src/js/colonies.js"></script>
     <script src="../src/js/ecosystem.js"></script>
+    <script src="../src/js/renderer.js"></script>
+    <script src="../src/js/ui.js"></script>
 
     <!-- Load test files -->
     <script src="test-utils.js"></script>

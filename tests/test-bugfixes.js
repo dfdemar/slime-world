@@ -24,12 +24,10 @@ function runBugFixTests() {
         };
         
         // Mock document.getElementById
-        const originalGetElement = global.document?.getElementById;
-        global.document = {
-            getElementById: (id) => {
-                if (id === 'miniView') return mockMiniView;
-                return { innerHTML: '', textContent: '' };
-            }
+        const originalGetElement = document.getElementById;
+        document.getElementById = (id) => {
+            if (id === 'miniView') return mockMiniView;
+            return { innerHTML: '', textContent: '' };
         };
         
         // Test that refreshInspectorRealtime doesn't crash and uses correct coordinates
@@ -43,9 +41,7 @@ function runBugFixTests() {
         }
         
         // Restore
-        if (originalGetElement) {
-            global.document.getElementById = originalGetElement;
-        }
+        document.getElementById = originalGetElement;
         restore.restore();
     });
 

@@ -4,6 +4,7 @@ function loop(ts){
     last = ts;
     if(!World.paused || stepping){ stepEcosystem(); needRedraw=true; stepping=false; }
     if(needRedraw){ draw(); needRedraw=false; }
+    refreshInspectorRealtime(); // Update inspector stats in real-time
     requestAnimationFrame(loop);
 }
 function playPause(){ World.paused = !World.paused; document.getElementById('btnPause').textContent = World.paused? '▶️ Play' : '⏸️ Pause'; }
