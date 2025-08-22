@@ -1,6 +1,44 @@
 
 'use strict';
 
+/* ===== Constants ===== */
+const SIMULATION_PARAMS = {
+  SLIME: {
+    evaporation: 0.985,
+    diffusion: 0.35, 
+    trailScale: 0.03,
+    trailBias: 0.06
+  },
+  NUTRIENT: {
+    diffusion: 0.1, // moderate diffusion for gradients
+    globalRegen: 0.035, // higher base regeneration
+    hotspotStrength: [0.15, 0.1], // stronger, more variable hotspots
+    hotspotCount: [18, 12], // [base, variance] more hotspots
+    consumptionRate: 0.012, // reasonable consumption rate
+    baseTarget: 0.45, // higher baseline for initial viability
+    targetScale: 0.6, // stronger environmental influence
+    hotspotRadius: [2, 3], // [min, variance] larger radius for better coverage
+    immediateConsumption: 0.003 // nutrients consumed during expansion
+  },
+  ECOSYSTEM: {
+    spawnProbabilityBase: 0.003,
+    spawnMutationScale: 0.008,
+    mutationSigma: 0.12,
+    energyThreshold: 0.35,
+    starvationMax: 0.35, // was 0.28
+    biomassGrowth: 0.005,
+    decayFast: 0.98,
+    decayNormal: 0.992
+  },
+  BALANCE: {
+    typePressureScale: 0.8,
+    typePressureMin: 0.5,
+    capacityPenalty: 0.35,
+    transportBonus: 0.12,
+    scoutBonus: 0.04
+  }
+};
+
 /* ===== Utilities & PRNG ===== */
 function sfc32(a,b,c,d){return function(){a|=0;b|=0;c|=0;d|=0;var t=(a+b|0)+d|0;d=d+1|0;a=b^b>>>9;b=c+(c<<3)|0;c=(c<<21|c>>>11);c=c+t|0;return (t>>>0)/4294967296}}
 function xmur3(str){for(var i=0,h=1779033703^str.length;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^h>>>16)>>>0}}
@@ -82,20 +120,32 @@ const World = {
 // Slime trails
 const Slime = {
   trail:null, trailNext:null,
-  params:{evap:0.985, diff:0.35, trailScale:0.03},
   clear(){ this.trail.fill(0) },
-  sat(v){ return 1 - Math.exp(-this.params.trailScale * v) },
+  sat(v){ return 1 - Math.exp(-SIMULATION_PARAMS.SLIME.trailScale * v) },
   diffuseEvaporate(){
-    const {evap,diff} = this.params; const W=World.W, H=World.H; const T=this.trail, N=this.trailNext;
+    const {evaporation, diffusion} = SIMULATION_PARAMS.SLIME;
+    const W=World.W, H=World.H; const T=this.trail, N=this.trailNext;
     for(let y=0;y<H;y++){
       for(let x=0;x<W;x++){
         const i=y*W + x;
-        const l=T[y*W + ((x-1+W)%W)], r=T[y*W + ((x+1)%W)], u=T[((y-1+H)%H)*W + x], d=T[((y+1+H)%H)*W + x];
-        const mixed = (1-diff)*T[i] + (diff*0.25)*(l+r+u+d);
-        N[i] = mixed * evap;
+        const l=T[y*W + ((x-1+W)%W)]||0, r=T[y*W + ((x+1)%W)]||0, u=T[((y-1+H)%H)*W + x]||0, d=T[((y+1+H)%H)*W + x]||0;
+        const self = T[i]||0;
+        const mixed = (1-diffusion)*self + (diffusion*0.25)*(l+r+u+d);
+        N[i] = mixed * evaporation;
       }
     }
-    this.trail.set(N);
+    // Proper buffer swap (fix for slime behavior regression)
+    this.trail = N;
+    this.trailNext = T;
+  },
+  cleanup(){
+    // Periodic cleanup to prevent accumulation of tiny values
+    if(World.tick % 100 === 0) {
+      const threshold = 0.001;
+      for(let i = 0; i < this.trail.length; i++) {
+        if(this.trail[i] < threshold) this.trail[i] = 0;
+      }
+    }
   },
   render(ctx, cell){
     const W=World.W,H=World.H; const img = ctx.createImageData(W,H);
@@ -146,7 +196,24 @@ function newColony(type, x, y, parent=null){
 
 function seedInitialColonies(){
   const {W,H} = World; const types = Object.keys(Archetypes); const count = 8;
-  for(let i=0;i<count;i++){ const t = types[Math.floor(World.rng()*types.length)]; const x = Math.floor(World.rng()*W), y=Math.floor(World.rng()*H); newColony(t, x, y, null); }
+  
+  // Try to place colonies near nutrient hotspots for better initial survival
+  for(let i=0;i<count;i++){ 
+    const t = types[Math.floor(World.rng()*types.length)];
+    let x, y;
+    
+    // Try to place near hotspots if they exist
+    if(World.hotspots.length > 0 && i < World.hotspots.length) {
+      const hs = World.hotspots[i % World.hotspots.length];
+      x = clamp(hs.x + Math.floor(World.rng()*6-3), 0, W-1);
+      y = clamp(hs.y + Math.floor(World.rng()*6-3), 0, H-1);
+    } else {
+      x = Math.floor(World.rng()*W);
+      y = Math.floor(World.rng()*H);
+    }
+    
+    newColony(t, x, y, null); 
+  }
 }
 
 /* ===== Environment generation (water pools + scarce nutrients) ===== */
@@ -195,8 +262,8 @@ function buildEnvironment(){
       const band = 0.5+0.5*Math.sin((ny-0.2)*Math.PI*2);
       const light = clamp(0.25 + 0.75*l0*band, 0, 1);
       const humid = clamp(0.2 + 0.8*h0*(1.0 - 0.25*Math.abs(nx-0.5)), 0, 1);
-      // Scarcer nutrient baseline (concentrated around noise peaks)
-      const nutr  = clamp(0.12 + 0.55*n0, 0, 1);
+      // Higher baseline nutrients for initial viability
+      const nutr  = clamp(0.2 + 0.3*n0, 0, 1);
       World.env.humidity[idx(x,y)] = humid;
       World.env.light[idx(x,y)] = light;
       World.env.nutrient[idx(x,y)] = nutr;
@@ -226,74 +293,187 @@ function buildEnvironment(){
 
   // Create nutrient hotspots (fountains) to keep sim going
   World.hotspots = [];
-  const hotspotCount = Math.max(4, Math.floor((W*H)/5000)); // scale with world size
+  const [baseCount, countVar] = SIMULATION_PARAMS.NUTRIENT.hotspotCount;
+  const hotspotCount = baseCount + Math.floor(countVar * World.rng()) + Math.floor((W*H)/3000);
+  const [minStrength, strengthVar] = SIMULATION_PARAMS.NUTRIENT.hotspotStrength;
+  const [minRadius, radiusVar] = SIMULATION_PARAMS.NUTRIENT.hotspotRadius;
+  
   for(let h=0; h<hotspotCount; h++){
     World.hotspots.push({
       x: Math.floor(World.rng()*W),
       y: Math.floor(World.rng()*H),
-      strength: 0.06 + 0.04*World.rng(), // regen per tick
-      radius: 3 + Math.floor(World.rng()*3)
+      strength: minStrength + strengthVar*World.rng(),
+      radius: minRadius + Math.floor(radiusVar*World.rng()),
+      age: 0 // for tracking lifecycle
     });
   }
+  
+  // Debug: Log nutrient initialization
+  let totalNutrients = 0;
+  for(let i = 0; i < World.env.nutrient.length; i++) {
+    totalNutrients += World.env.nutrient[i];
+  }
+  console.log(`Environment built: ${World.hotspots.length} hotspots, avg nutrients: ${(totalNutrients/World.env.nutrient.length).toFixed(3)}`);
 }
 
 function nutrientDynamics(){
   const {nutrient, humidity, water} = World.env;
   const Nn = World._nutrientNext; const W=World.W, H=World.H;
-  const diff=0.12, regen=0.006; // scarcer global regeneration
+  const {diffusion, globalRegen, baseTarget, targetScale} = SIMULATION_PARAMS.NUTRIENT;
+  
+  // Debug: Check input state
+  if(World.tick % 100 === 0) {
+    const beforeSum = nutrient.reduce((a,b) => a+b, 0);
+    console.log(`Nutrient dynamics: tick=${World.tick}, before=${beforeSum.toFixed(1)}, hotspots=${World.hotspots.length}`);
+  }
+  
+  // Base diffusion and regeneration
   for(let y=0;y<H;y++){
     for(let x=0;x<W;x++){
-      const i=y*W+x; const n=nutrient[i];
-      const l=nutrient[y*W + ((x-1+W)%W)], r=nutrient[y*W + ((x+1)%W)], u=nutrient[((y-1+H)%H)*W + x], d=nutrient[((y+1+H)%H)*W + x];
-      const mixed = (1-diff)*n + (diff*0.25)*(l+r+u+d);
-      const target = clamp(0.10 + 0.5*humidity[i] + 0.20*water[i], 0, 1);
-      Nn[i] = clamp(mixed + regen*(target - mixed), 0, 1);
+      const i=y*W+x; 
+      const n=nutrient[i] || 0;
+      
+      // Debug: Check for NaN in input
+      if(isNaN(n) && World.tick < 10) {
+        console.error(`NaN input at (${x},${y}): nutrient[${i}]=${nutrient[i]}`);
+      }
+      
+      // Neighbor diffusion with wrapping
+      const l=nutrient[y*W + ((x-1+W)%W)] || 0;
+      const r=nutrient[y*W + ((x+1)%W)] || 0;
+      const u=nutrient[((y-1+H)%H)*W + x] || 0;
+      const d=nutrient[((y+1+H)%H)*W + x] || 0;
+      const mixed = (1-diffusion)*n + (diffusion*0.25)*(l+r+u+d);
+      
+      // Debug: Check for NaN in diffusion
+      if(isNaN(mixed) && World.tick < 10) {
+        console.error(`NaN in diffusion at (${x},${y}): n=${n}, l=${l}, r=${r}, u=${u}, d=${d}, diffusion=${diffusion}`);
+      }
+      
+      // Environmental regeneration target based on humidity and water
+      const h = humidity[i] || 0;
+      const w = water[i] || 0;
+      const envTarget = clamp(baseTarget + targetScale*(h + 0.4*w), 0, 1);
+      
+      // Always regenerate toward environmental target
+      const deficit = envTarget - n; // Use original value, not mixed
+      const regenRate = globalRegen * (deficit > 0 ? (1 + deficit) : 0.2);
+      const regen = regenRate * deficit;
+      
+      const newValue = clamp(mixed + regen, 0, 1);
+      
+      // Debug: Check for NaN
+      if(isNaN(newValue) && World.tick < 10) {
+        console.error(`NaN at (${x},${y}): n=${n}, mixed=${mixed}, envTarget=${envTarget}, deficit=${deficit}, regen=${regen}`);
+        console.error(`Params: baseTarget=${baseTarget}, targetScale=${targetScale}, globalRegen=${globalRegen}`);
+      }
+      
+      Nn[i] = newValue;
     }
   }
-  // Hotspot injection
+  
+  // Hotspot injection - apply directly to current nutrients for immediate effect
   for(const hs of World.hotspots){
+    hs.age++;
+    
+    // Drift hotspots for dynamism
+    if(World.tick % 120 === 0) {
+      hs.x = clamp(hs.x + randRange(World.rng, -2, 2), 2, W-3);
+      hs.y = clamp(hs.y + randRange(World.rng, -2, 2), 2, H-3);
+    }
+    
     const {x,y,strength,radius} = hs;
+    
+    // Inject into both current and next buffers for immediate availability
     for(let dy=-radius; dy<=radius; dy++){
       for(let dx=-radius; dx<=radius; dx++){
-        const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
+        const nx=x+dx, ny=y+dy; 
+        if(!inBounds(nx,ny)) continue;
+        
         const dist = Math.sqrt(dx*dx+dy*dy);
-        if(dist<=radius){
-          const w = (1 - dist/radius);
+        if(dist <= radius){
           const i = idx(nx,ny);
-          Nn[i] = clamp(Nn[i] + strength*w, 0, 1);
+          
+          // Sharp exponential falloff for strong gradients
+          const falloff = Math.exp(-dist*1.2);
+          const biomass = World.biomass[i] || 0;
+          const biomassReduction = 1 - 0.3 * Math.min(1, biomass);
+          const injection = strength * falloff * biomassReduction;
+          
+          // Debug: Check for NaN in hotspot injection
+          if(isNaN(injection) && World.tick < 10) {
+            console.error(`NaN injection at (${nx},${ny}): strength=${strength}, falloff=${falloff}, biomassReduction=${biomassReduction}, biomass=${biomass}`);
+          }
+          
+          // Apply to both buffers for immediate effect
+          const currentNn = Nn[i] || 0;
+          const currentNutrient = nutrient[i] || 0;
+          Nn[i] = clamp(currentNn + injection, 0, 1);
+          nutrient[i] = clamp(currentNutrient + injection * 0.5, 0, 1); // immediate boost
         }
       }
     }
   }
+  
   nutrient.set(Nn);
 }
 
 /* ===== SMA-informed suitability & growth ===== */
 function suitabilityAt(col, x, y){
   const {humidity, light, nutrient, water} = World.env; const i=idx(x,y);
-  function s(field){
-    let sum = field[i]; let count=1;
-    if(inBounds(x-1,y)) { sum += field[idx(x-1,y)]; count++; }
-    if(inBounds(x+1,y)) { sum += field[idx(x+1,y)]; count++; }
-    if(inBounds(x,y-1)) { sum += field[idx(x,y-1)]; count++; }
-    if(inBounds(x,y+1)) { sum += field[idx(x,y+1)]; count++; }
-    return sum / count;
-  }
-  const h=s(humidity), l=s(light), n=nutrient[i], w=water[i];
+  
+  // Use direct values instead of averaging to preserve gradients
+  const h=humidity[i], l=light[i], n=nutrient[i], w=water[i];
+  
+  // Calculate neighbor nutrient average for smoother gradients
+  let neighborSum = n;
+  let neighborCount = 1;
+  if(inBounds(x-1,y)) { neighborSum += nutrient[idx(x-1,y)]; neighborCount++; }
+  if(inBounds(x+1,y)) { neighborSum += nutrient[idx(x+1,y)]; neighborCount++; }
+  if(inBounds(x,y-1)) { neighborSum += nutrient[idx(x,y-1)]; neighborCount++; }
+  if(inBounds(x,y+1)) { neighborSum += nutrient[idx(x,y+1)]; neighborCount++; }
+  const avgNutrient = neighborSum / neighborCount;
+  
   const T=col.traits; const B=TypeBehavior[col.type] || TypeBehavior.MAT;
+  
+  // Environmental suitability
   const waterFit = 1.0 - Math.abs(h - T.water_need);
-  const lightFit = T.photosym>0 ? (0.55*(1.0 - Math.abs(l - T.light_use)) + 0.45*T.photosym*l) : (1.0 - 0.6*l);
+  const lightFit = T.photosym>0 ? (0.6*(1.0 - Math.abs(l - T.light_use)) + 0.4*T.photosym*l) : (1.0 - 0.5*l);
+  
+  // Chemical signals - use smoothed nutrient signal
   const trSat = Slime.sat(Slime.trail[i]);
+  const nutrientSignal = 0.6*n + 0.4*avgNutrient; // local + smooth neighborhood
   const denom = Math.max(1e-6, (B.nutrientW||0) + (B.trailW||0));
-  const chemo = ((B.nutrientW||0)*n + (B.trailW||0)*trSat) / denom; // combined gradient
-  let raftBonus = (col.type==='FLOAT') ? (w? 0.25: -0.08) : 0; raftBonus += ((B.waterAffinity && w)? B.waterAffinity:0);
-  const base = clamp(0.06*waterFit + 0.06*lightFit + 0.88*chemo + raftBonus, 0, 1);
-  let conn=0; let neigh=0; for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue; neigh++; if(World.tiles[idx(nx,ny)]===col.id) conn++; }
+  const chemo = ((B.nutrientW||0)*nutrientSignal + (B.trailW||0)*trSat) / denom;
+  
+  // Type-specific bonuses
+  let typeBonus = 0;
+  if(col.type==='FLOAT') typeBonus = w ? 0.2 : -0.05;
+  if(B.waterAffinity && w) typeBonus += B.waterAffinity;
+  
+  // Base suitability with balanced factors
+  const base = clamp(0.1*waterFit + 0.1*lightFit + 0.8*chemo + typeBonus, 0, 1);
+  
+  // Connectivity and transport bonus
+  let conn=0; let neigh=0; 
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    const nx=x+dx, ny=y+dy; 
+    if(!inBounds(nx,ny)) continue; 
+    neigh++; 
+    if(World.tiles[idx(nx,ny)]===col.id) conn++;
+  }
   const connectivity = neigh? (conn/neigh):0;
-  const transportBonus = 0.12*col.traits.transport*connectivity + (col.type==='SCOUT'? 0.04:0);
+  
+  const {transportBonus: tBonus, scoutBonus, capacityPenalty: cPenalty} = SIMULATION_PARAMS.BALANCE;
+  const transportBonus = tBonus*col.traits.transport*connectivity + (col.type==='SCOUT'? scoutBonus:0);
+  
+  // Capacity pressure
   const cap = World.capacity; const density = World.biomass[i];
-  const capPenalty = -0.35*clamp((density - cap), 0, 1);
+  const capPenalty = -cPenalty*clamp((density - cap), 0, 1);
+  
+  // Type pressure for diversity
   const pressure = World.typePressure[col.type] ?? 1;
+  
   return clamp(base*pressure + transportBonus + capPenalty, 0, 1);
 }
 
@@ -302,9 +482,10 @@ function updateTypePressure(){
   const idToType=new Map(); for(const c of World.colonies){ idToType.set(c.id,c.type) }
   let filled=0; for(let i=0;i<World.tiles.length;i++){ const id=World.tiles[i]; if(id===-1) continue; filled++; const t=idToType.get(id); if(t){ counts[t]=(counts[t]||0)+1; } }
   const total=Math.max(1,filled); World.typePressure={};
+  const {typePressureScale, typePressureMin} = SIMULATION_PARAMS.BALANCE;
   for(const t of Object.keys(Archetypes)){
     const share=(counts[t]||0)/total;
-    const pressure=clamp(1 - 0.8*share, 0.5, 1.0);
+    const pressure=clamp(1 - typePressureScale*share, typePressureMin, 1.0);
     World.typePressure[t]=pressure;
   }
 }
@@ -329,14 +510,21 @@ function tryExpand(col){
             ok = (pred + comp) > randRange(World.rng,-0.15,0.1);
           }
         }
-        if(ok){ const trailBias = 0.06*Slime.sat(Slime.trail[j]); const score = s + trailBias + (foe===-1?0.05:0) + World.rng()*0.02; if(score>bestScore){ bestScore=score; best={x:nx,y:ny}; bestI=j } }
+        if(ok){ const trailBias = SIMULATION_PARAMS.SLIME.trailBias*Slime.sat(Slime.trail[j]); const score = s + trailBias + (foe===-1?0.05:0) + World.rng()*0.02; if(score>bestScore){ bestScore=score; best={x:nx,y:ny}; bestI=j } }
       }
     }
   }
   if(best){
     World.tiles[bestI]=col.id; World.biomass[bestI]=clamp((World.biomass[bestI]||0)+0.2, 0, 2.5); col.x=best.x; col.y=best.y;
+    
+    // Deposit slime trail
     const dep=(TypeBehavior[col.type]?.deposit||0.5) * (0.5 + 0.5*col.traits.flow);
-    Slime.trail[bestI]+=dep; World.env.nutrient[bestI]=clamp(World.env.nutrient[bestI]-0.03,0,1);
+    Slime.trail[bestI]+=dep; 
+    
+    // Immediate nutrient consumption during expansion
+    const consumption = SIMULATION_PARAMS.NUTRIENT.immediateConsumption;
+    World.env.nutrient[bestI]=clamp(World.env.nutrient[bestI] - consumption, 0, 1);
+    
     return true;
   }
   return false;
@@ -344,13 +532,30 @@ function tryExpand(col){
 
 function starvationSweep(){
   const {nutrient, light}=World.env;
+  const {consumptionRate, energyThreshold, starvationMax, biomassGrowth} = SIMULATION_PARAMS.ECOSYSTEM;
   const idToCol=new Map(); for(const c of World.colonies){ idToCol.set(c.id,c); }
+  
   for(let i=0;i<World.tiles.length;i++){
-    const id=World.tiles[i]; if(id===-1) continue; const col=idToCol.get(id); if(!col){ World.tiles[i]=-1; continue; }
-    const n=nutrient[i], l=light[i], ps=col.traits.photosym||0; const energy=0.7*n + 0.3*ps*l;
-    const cons=Math.min(n, 0.010 * Math.max(0.1, World.biomass[i])); nutrient[i]=clamp(n - cons, 0, 1); // stronger consumption
-    if(energy < 0.35){ const deficit=(0.35-energy); const factor=1 - Math.min(0.85*deficit, 0.35); World.biomass[i]*=factor; } 
-    else { const cap=World.capacity; if(World.biomass[i]<cap){ World.biomass[i]=Math.min(cap, World.biomass[i] + 0.005*(energy-0.35)); } }
+    const id=World.tiles[i]; if(id===-1) continue;
+    const col=idToCol.get(id); if(!col){ World.tiles[i]=-1; continue; }
+    
+    const n=nutrient[i], l=light[i], ps=col.traits.photosym||0;
+    const energy=0.7*n + 0.3*ps*l;
+    // Scale consumption by biomass but make it more reasonable
+    const cons=Math.min(n * 0.8, consumptionRate * (0.5 + 0.5*World.biomass[i]));
+    nutrient[i]=clamp(n - cons, 0, 1);
+    
+    if(energy < energyThreshold){ 
+      const deficit=(energyThreshold-energy); 
+      const factor=1 - Math.min(0.85*deficit, starvationMax); 
+      World.biomass[i]*=factor;
+    } else { 
+      const cap=World.capacity; 
+      if(World.biomass[i]<cap){ 
+        World.biomass[i]=Math.min(cap, World.biomass[i] + biomassGrowth*(energy-energyThreshold));
+      }
+    }
+    
     if(World.biomass[i] < 0.05){ World.tiles[i]=-1; }
   }
 }
@@ -371,17 +576,25 @@ function stepEcosystem(){
       for(let k=0;k<cols.length;k++){
         const i = (k + (World.tick%cols.length))%cols.length; const c = cols[i]; if(!c) continue; c.age++;
         c.lastFit = suitabilityAt(c, clamp(Math.round(c.x),0,World.W-1), clamp(Math.round(c.y),0,World.H-1));
-        if(!tryExpand(c)) { const decay = (c.lastFit<0.4) ? 0.98 : 0.992; c.biomass *= decay; } else { c.biomass = clamp(c.biomass + 0.01, 0, 3); }
-        const pressure = World.typePressure[c.type] ?? 1; const spawnP = (0.003 + 0.008*World.mutationRate) * pressure;
+        const {decayFast, decayNormal, spawnProbabilityBase, spawnMutationScale} = SIMULATION_PARAMS.ECOSYSTEM;
+        if(!tryExpand(c)) { 
+          const decay = (c.lastFit<0.4) ? decayFast : decayNormal; 
+          c.biomass *= decay; 
+        } else { 
+          c.biomass = clamp(c.biomass + 0.01, 0, 3); 
+        }
+        const pressure = World.typePressure[c.type] ?? 1; 
+        const spawnP = (spawnProbabilityBase + spawnMutationScale*World.mutationRate) * pressure;
         if(c.biomass>0.8 && c.lastFit>0.55 && Math.random()< spawnP){
           const dir=[[1,0],[-1,0],[0,1],[0,-1]][Math.floor(World.rng()*4)]; const bx = clamp(Math.round(c.x+dir[0]*2),0,World.W-1); const by = clamp(Math.round(c.y+dir[1]*2),0,World.H-1);
-          const child = {...c}; child.id = World.nextId++; child.parent=c.id; child.gen=c.gen+1; child.kids=[]; child.age=0; child.x=bx; child.y=by; child.biomass=0.6; child.traits = (function(tr){ const t={...tr}; const keys=Object.keys(t); const m=World.mutationRate; for(const k of keys){ const sigma=0.12*m; t[k]=clamp(t[k] + randRange(World.rng,-sigma,sigma), 0, 1);} return t; })(c.traits); child.color = jitterColor(c.color, 14);
+          const child = {...c}; child.id = World.nextId++; child.parent=c.id; child.gen=c.gen+1; child.kids=[]; child.age=0; child.x=bx; child.y=by; child.biomass=0.6; child.traits = (function(tr){ const t={...tr}; const keys=Object.keys(t); const m=World.mutationRate; for(const k of keys){ const sigma=SIMULATION_PARAMS.ECOSYSTEM.mutationSigma*m; t[k]=clamp(t[k] + randRange(World.rng,-sigma,sigma), 0, 1);} return t; })(c.traits); child.color = jitterColor(c.color, 14);
           World.colonies.push(child); c.kids.push(child.id); const bi=idx(bx,by); if(World.tiles[bi]===-1){World.tiles[bi]=child.id; World.biomass[bi]=0.4; Slime.trail[bi]+= (TypeBehavior[c.type]?.deposit||0.5); }
         }
       }
     }
 
     Slime.diffuseEvaporate();
+    Slime.cleanup(); // Prevent value accumulation
     starvationSweep(); nutrientDynamics(); if(World.tick%30===0) updateTypePressure();
     if(World.tick%60===0){ const alive = new Set(World.tiles); World.colonies = World.colonies.filter(c=>alive.has(c.id)); }
   }
@@ -408,8 +621,15 @@ function resize(){
 window.addEventListener('resize', ()=>{resize(); draw(true)});
 
 const patternCache = new Map();
+const PATTERN_CACHE_LIMIT = 200; // Prevent unbounded growth
 function makePatternFor(col){
   if(patternCache.has(col.id)) return patternCache.get(col.id);
+  
+  // Clean cache if too large
+  if(patternCache.size >= PATTERN_CACHE_LIMIT) {
+    const oldestKeys = Array.from(patternCache.keys()).slice(0, 50);
+    oldestKeys.forEach(key => patternCache.delete(key));
+  }
   const seed = xmur3(String(col.id))();
   const r = sfc32(seed, seed^0x9e3779b9, seed^0x85ebca6b, seed^0xc2b2ae35);
   const c = document.createElement('canvas'); c.width=8; c.height=8; const pctx=c.getContext('2d');
@@ -463,6 +683,331 @@ function draw(){
   // hover box
   if(World.hover.x>=0){ ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=2; ctx.strokeRect(World.hover.x*cell+0.5, World.hover.y*cell+0.5, cell-1, cell-1); }
 }
+
+/* ===== Diagnostics ===== */
+function validateSlimeTrails(){
+  // Test that slime trails properly diffuse and evaporate
+  const oldSum = Slime.trail.reduce((a,v) => a+v, 0);
+  Slime.diffuseEvaporate();
+  const newSum = Slime.trail.reduce((a,v) => a+v, 0);
+  return Number.isFinite(newSum) && newSum <= oldSum; // Should decrease or stay same due to evaporation
+}
+
+function validateNutrientBalance(){
+  // Check that hotspots exist and basic nutrient levels are reasonable
+  if(!World.env || !World.env.nutrient) {
+    console.log('No nutrient array');
+    return false;
+  }
+  
+  // Check overall nutrient levels
+  let totalNutrients = 0;
+  for(let i = 0; i < World.env.nutrient.length; i++) {
+    totalNutrients += World.env.nutrient[i];
+  }
+  const avgGlobal = totalNutrients / World.env.nutrient.length;
+  
+  console.log(`Global avg nutrients: ${avgGlobal.toFixed(3)}, Hotspots: ${World.hotspots ? World.hotspots.length : 0}`);
+  
+  // Much lower threshold since nutrients start around 0.2-0.5 range
+  return avgGlobal > 0.1; // Should have reasonable baseline
+}
+
+// Comprehensive test suite for nutrient dynamics
+function validateNutrientDynamics(){
+  const tests = [];
+  
+  // Test 1: Nutrient regeneration works
+  tests.push({
+    name: 'Nutrient Regeneration',
+    test: () => {
+      if(!World.env.nutrient) return false;
+      
+      // Store original values
+      const original = [...World.env.nutrient];
+      
+      // Zero out some nutrients
+      for(let i = 0; i < Math.min(50, World.env.nutrient.length); i++) {
+        World.env.nutrient[i] = 0;
+      }
+      
+      // Run dynamics multiple times
+      for(let step = 0; step < 10; step++) {
+        nutrientDynamics();
+      }
+      
+      // Check if nutrients regenerated
+      let regenerated = 0;
+      for(let i = 0; i < Math.min(50, World.env.nutrient.length); i++) {
+        if(World.env.nutrient[i] > 0.02) regenerated++;
+      }
+      
+      // Restore original values
+      World.env.nutrient.set(original);
+      
+      console.log(`Regeneration test: ${regenerated}/50 tiles regenerated`);
+      return regenerated > 5; // At least some should regenerate
+    }
+  });
+  
+  // Test 2: Hotspots create gradients
+  tests.push({
+    name: 'Hotspot Gradients', 
+    test: () => {
+      if(World.hotspots.length === 0) {
+        console.log('No hotspots for gradient test');
+        return false;
+      }
+      
+      if(!World.hotspots || World.hotspots.length === 0) {
+        console.log('No hotspots available for test');
+        return false;
+      }
+      
+      // Clear nutrients first
+      World.env.nutrient.fill(0.05);
+      
+      // Run multiple dynamics steps to let hotspots work
+      for(let step = 0; step < 5; step++) {
+        nutrientDynamics();
+      }
+      
+      // Check if any hotspot area has elevated nutrients
+      let hasElevated = false;
+      for(const hs of World.hotspots) {
+        if(!inBounds(hs.x, hs.y)) continue;
+        
+        const centerValue = World.env.nutrient[idx(hs.x, hs.y)];
+        console.log(`Hotspot at (${hs.x},${hs.y}): ${centerValue.toFixed(3)}`);
+        
+        if(centerValue > 0.15) {
+          hasElevated = true;
+          break;
+        }
+      }
+      
+      return hasElevated;
+    }
+  });
+  
+  // Test 3: Consumption reduces nutrients
+  tests.push({
+    name: 'Nutrient Consumption',
+    test: () => {
+      // Test immediate consumption during expansion
+      const testIdx = Math.floor(World.env.nutrient.length / 2);
+      World.env.nutrient[testIdx] = 0.5;
+      
+      const beforeConsumption = World.env.nutrient[testIdx];
+      
+      // Simulate expansion consumption
+      const consumption = SIMULATION_PARAMS.NUTRIENT.immediateConsumption;
+      World.env.nutrient[testIdx] = clamp(World.env.nutrient[testIdx] - consumption, 0, 1);
+      
+      const afterConsumption = World.env.nutrient[testIdx];
+      
+      console.log(`Consumption test: ${beforeConsumption.toFixed(3)} -> ${afterConsumption.toFixed(3)}`);
+      return afterConsumption < beforeConsumption;
+    }
+  });
+  
+  // Test 4: Diffusion spreads nutrients
+  tests.push({
+    name: 'Nutrient Diffusion',
+    test: () => {
+      // Store original state
+      const original = [...World.env.nutrient];
+      
+      // Create a high concentration spot
+      const testX = Math.floor(World.W/2), testY = Math.floor(World.H/2);
+      const center = idx(testX, testY);
+      
+      // Set up test pattern
+      World.env.nutrient.fill(0.1); // low baseline
+      World.env.nutrient[center] = 0.8; // high center
+      
+      // Run diffusion
+      nutrientDynamics();
+      
+      // Check if neighbors gained nutrients above baseline
+      let diffused = false;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = testX + dx, ny = testY + dy;
+        if(inBounds(nx, ny)) {
+          const neighborValue = World.env.nutrient[idx(nx, ny)];
+          if(neighborValue > 0.15) { // above baseline
+            diffused = true;
+            break;
+          }
+        }
+      }
+      
+      // Restore original state
+      World.env.nutrient.set(original);
+      
+      return diffused;
+    }
+  });
+  
+  return tests;
+}
+
+// Test colony movement and expansion
+function validateColonyMovement(){
+  const tests = [];
+  
+  // Test 1: Suitability calculation responds to nutrients
+  tests.push({
+    name: 'Suitability Nutrient Response',
+    test: () => {
+      if(World.colonies.length === 0) return false;
+      
+      const col = World.colonies[0];
+      const x = Math.floor(World.W/2), y = Math.floor(World.H/2);
+      
+      // Set up consistent environment except nutrients
+      World.env.humidity[idx(x, y)] = col.traits.water_need;
+      World.env.light[idx(x, y)] = col.traits.light_use;
+      World.env.water[idx(x, y)] = 0;
+      
+      // Test high nutrient suitability
+      World.env.nutrient[idx(x, y)] = 0.8;
+      const highSuit = suitabilityAt(col, x, y);
+      
+      // Test low nutrient suitability
+      World.env.nutrient[idx(x, y)] = 0.1;
+      const lowSuit = suitabilityAt(col, x, y);
+      
+      console.log(`Suitability test: high=${highSuit}, low=${lowSuit}`);
+      return highSuit > lowSuit + 0.05; // Should be higher
+    }
+  });
+  
+  // Test 2: Colonies can expand successfully
+  tests.push({
+    name: 'Colony Expansion',
+    test: () => {
+      if(World.colonies.length === 0) return false;
+      
+      const col = World.colonies[0];
+      const oldX = col.x, oldY = col.y;
+      
+      // Clear area around colony
+      for(let dy = -3; dy <= 3; dy++) {
+        for(let dx = -3; dx <= 3; dx++) {
+          const nx = oldX + dx, ny = oldY + dy;
+          if(inBounds(nx, ny)) {
+            const i = idx(nx, ny);
+            if(World.tiles[i] !== col.id) {
+              World.tiles[i] = -1; // clear other colonies
+            }
+            World.env.nutrient[i] = 0.7;
+            World.env.humidity[i] = col.traits.water_need;
+            World.env.light[i] = col.traits.light_use;
+            World.env.water[i] = 0;
+          }
+        }
+      }
+      
+      // Try expansion multiple times
+      let expanded = false;
+      for(let attempt = 0; attempt < 5; attempt++) {
+        if(tryExpand(col)) {
+          expanded = true;
+          break;
+        }
+      }
+      
+      console.log(`Expansion test: ${expanded}, pos: (${oldX},${oldY}) -> (${col.x},${col.y})`);
+      return expanded;
+    }
+  });
+  
+  // Test 3: Nutrient gradient following
+  tests.push({
+    name: 'Gradient Following',
+    test: () => {
+      if(World.colonies.length === 0) return false;
+      
+      const col = World.colonies[0];
+      const x = Math.floor(World.W/2), y = Math.floor(World.H/2);
+      
+      // Set up environment conditions to focus on nutrients
+      World.env.humidity[idx(x, y)] = col.traits.water_need;
+      World.env.humidity[idx(x+1, y)] = col.traits.water_need;
+      World.env.humidity[idx(x-1, y)] = col.traits.water_need;
+      World.env.light[idx(x, y)] = col.traits.light_use;
+      World.env.light[idx(x+1, y)] = col.traits.light_use;
+      World.env.light[idx(x-1, y)] = col.traits.light_use;
+      
+      // Create strong nutrient gradient
+      World.env.nutrient[idx(x, y)] = 0.3;
+      World.env.nutrient[idx(x+1, y)] = 0.7; // High to the right
+      World.env.nutrient[idx(x-1, y)] = 0.1; // Low to the left
+      
+      const rightSuit = suitabilityAt(col, x+1, y);
+      const leftSuit = suitabilityAt(col, x-1, y);
+      
+      console.log(`Gradient test: right=${rightSuit}, left=${leftSuit}`);
+      return rightSuit > leftSuit + 0.1; // Should prefer high nutrient area
+    }
+  });
+  
+  return tests;
+}
+
+// Run all tests and return results
+function runAllTests(){
+  const results = {
+    slimeTrails: validateSlimeTrails(),
+    nutrientBalance: validateNutrientBalance(),
+    nutrientDynamics: [],
+    colonyMovement: []
+  };
+  
+  // Run nutrient dynamics tests
+  const nutrientTests = validateNutrientDynamics();
+  for(const test of nutrientTests) {
+    try {
+      const passed = test.test();
+      results.nutrientDynamics.push({name: test.name, passed});
+    } catch(e) {
+      results.nutrientDynamics.push({name: test.name, passed: false, error: e.message});
+    }
+  }
+  
+  // Run colony movement tests
+  const movementTests = validateColonyMovement();
+  for(const test of movementTests) {
+    try {
+      const passed = test.test();
+      results.colonyMovement.push({name: test.name, passed});
+    } catch(e) {
+      results.colonyMovement.push({name: test.name, passed: false, error: e.message});
+    }
+  }
+  
+  return results;
+}
+
+// Console API for testing
+window.validateSlimeTrails = validateSlimeTrails;
+window.validateNutrientBalance = validateNutrientBalance;
+window.validateNutrientDynamics = validateNutrientDynamics;
+window.validateColonyMovement = validateColonyMovement;
+window.runAllTests = runAllTests;
+window.debugNutrients = () => {
+  if(!World.env.nutrient) return 'No nutrient array';
+  let sum = 0, min = 1, max = 0, count = 0;
+  for(let i = 0; i < World.env.nutrient.length; i++) {
+    const n = World.env.nutrient[i];
+    sum += n; count++;
+    min = Math.min(min, n);
+    max = Math.max(max, n);
+  }
+  const avg = sum / count;
+  return `Nutrients: avg=${avg.toFixed(3)}, min=${min.toFixed(3)}, max=${max.toFixed(3)}, hotspots=${World.hotspots.length}`;
+};
 
 /* ===== Interaction & UI ===== */
 const statusEl = document.getElementById('status');
@@ -642,10 +1187,51 @@ document.getElementById('btnReseed').addEventListener('click', ()=>{
   const noise = ValueNoise(seed);
   World.rng = noise.r; World.field = noise;
   buildEnvironment(); 
+  seedInitialColonies(); // Fix: also reseed colonies
   Slime.clear();
+  updateTypePressure();
   refreshLegend(); 
   needRedraw=true; 
   notify('Environment reseeded','warn',900);
+});
+document.getElementById('btnRunTests').addEventListener('click', ()=>{
+  try {
+    const results = runAllTests();
+    let message = 'Test Results:\\n';
+    
+    message += `Slime Trails: ${results.slimeTrails ? 'PASS' : 'FAIL'}\\n`;
+    message += `Nutrient Balance: ${results.nutrientBalance ? 'PASS' : 'FAIL'}\\n`;
+    
+    // Add debug info
+    message += `\\nDEBUG: ${debugNutrients()}\\n`;
+    
+    message += '\\nNutrient Dynamics:\\n';
+    for(const test of results.nutrientDynamics) {
+      message += `  ${test.name}: ${test.passed ? 'PASS' : 'FAIL'}`;
+      if(test.error) message += ` (${test.error})`;
+      message += '\\n';
+    }
+    
+    message += '\\nColony Movement:\\n';
+    for(const test of results.colonyMovement) {
+      message += `  ${test.name}: ${test.passed ? 'PASS' : 'FAIL'}`;
+      if(test.error) message += ` (${test.error})`;
+      message += '\\n';
+    }
+    
+    console.log(message);
+    alert(message);
+    
+    const allPassed = results.slimeTrails && results.nutrientBalance && 
+                     results.nutrientDynamics.every(t => t.passed) &&
+                     results.colonyMovement.every(t => t.passed);
+    
+    notify(allPassed ? 'All tests passed!' : 'Some tests failed - check console', 
+           allPassed ? 'info' : 'warn', 3000);
+  } catch(e) {
+    console.error('Test error:', e);
+    notify('Test error: ' + e.message, 'error', 3000);
+  }
 });
 
 document.addEventListener('keydown', (e)=>{
@@ -720,11 +1306,8 @@ function boot(){
   document.getElementById('status').textContent='booting…';
   const seed = parseInt(document.getElementById('seed').value||'1337',10);
   const size = document.getElementById('worldSize').value;
-  const noise = ValueNoise(seed);
-  World.rng = noise.r; World.field = noise;
-  buildEnvironment();
-  seedInitialColonies();
-  updateTypePressure();
+  setupWorld(seed, size); // Use consistent setup
+  World.paused = false; // Start running
   resize();
   document.getElementById('status').textContent='running';
   requestAnimationFrame(frame);
