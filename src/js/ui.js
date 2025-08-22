@@ -96,10 +96,10 @@ function updateInspector(c) {
         '<div>' +
         '<b>' + name + '</b> <span class="small">(#' + c.id + ')</span><br/>' +
         '<span class="small italic">Species: ' + (c.species || '—') + '</span><br/>' +
-        '<span class="small">Gen ' + c.gen + ' • Age ' + formatAge(c.age) + '</span>' +
+        '<span class="small">Gen ' + c.gen + ' • Age <span id="inspectorAge">' + formatAge(c.age) + '</span></span>' +
         '</div>' +
         '</div>' +
-        '<div style="margin-top:6px" class="small">Parent: ' + (c.parent ?? '—') + ' • Kids: ' + c.kids.length + '</div>';
+        '<div style="margin-top:6px" class="small">Parent: ' + (c.parent ?? '—') + ' • Kids: <span id="inspectorKids">' + c.kids.length + '</span></div>';
 
     function bar(label, val) {
         const w = Math.round(100 * clamp(val, 0, 1));
@@ -142,6 +142,16 @@ function refreshInspectorRealtime(force = false) {
         rt.innerHTML = '';
         return;
     }
+    
+    // Update real-time age and kids count
+    const ageElement = document.getElementById('inspectorAge');
+    const kidsElement = document.getElementById('inspectorKids');
+    if (ageElement) {
+        ageElement.textContent = formatAge(col.age);
+    }
+    if (kidsElement) {
+        kidsElement.textContent = col.kids.length;
+    }
     let tiles = 0, mass = 0, fit = 0, minFit = 1, maxFit = 0;
     for (let i = 0; i < World.tiles.length; i++) {
         if (World.tiles[i] === col.id) {
@@ -160,17 +170,21 @@ function refreshInspectorRealtime(force = false) {
         + '<div class="kv"><div class="k">Avg Suit</div><div class="v">' + fit.toFixed(2) + '</div><div class="k">Fit Range</div><div class="v">' + minFit.toFixed(2) + '–' + maxFit.toFixed(2) + '</div></div>';
     // mini view
     const mv = document.getElementById('miniView');
-    const mctx = mv.getContext('2d');
-    mctx.clearRect(0, 0, mv.width, mv.height);
-    mctx.fillStyle = '#0a1326';
-    mctx.fillRect(0, 0, mv.width, mv.height);
-    mctx.fillStyle = '#9fb4ff';
-    const sx = mv.width / World.W, sy = mv.height / World.H;
-    for (let i = 0; i < World.tiles.length; i++) {
-        if (World.tiles[i] === col.id) {
-            const x = (i % World.W), y = Math.floor(i / World.W);
-            mctx.globalAlpha = 0.8;
-            mctx.fillRect(x * sx, y * sy, Math.max(1, sx), Math.max(1, sy));
+    if (mv) {
+        const mctx = mv.getContext('2d');
+        if (mctx) {
+            mctx.clearRect(0, 0, mv.width, mv.height);
+            mctx.fillStyle = '#0a1326';
+            mctx.fillRect(0, 0, mv.width, mv.height);
+            mctx.fillStyle = '#9fb4ff';
+            const sx = mv.width / World.W, sy = mv.height / World.H;
+            for (let i = 0; i < World.tiles.length; i++) {
+                if (World.tiles[i] === col.id) {
+                    const x = (i % World.W), y = Math.floor(i / World.W);
+                    mctx.globalAlpha = 0.8;
+                    mctx.fillRect(x * sx, y * sy, Math.max(1, sx), Math.max(1, sy));
+                }
+            }
         }
     }
 }
