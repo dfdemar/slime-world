@@ -1,11 +1,18 @@
 # Changelog
 
-All notable changes to the Slimeworld Evolution Simulator will be documented in this file.
+Notable changes to Slimeworld will be documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [2.4] - 2025-08-22
 
 ### Added
 - Comprehensive README with technical architecture and usage details
@@ -16,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with web-based test runner
 - Bug fix verification tests (`test-bugfixes.js`)
 - Starvation balance investigation and test coverage
+
+### Updated
+- **README.md**: Updated file structure to reflect modular architecture, enhanced testing section, version bump to 2.4
+- **CLAUDE.md**: Updated development environment, file structure, testing framework details, and current state to August 2025
+- **Documentation**: All references to monolithic architecture updated to reflect current modular structure
 
 ### Changed
 - Refactored monolithic index.html into multiple organized files
@@ -33,9 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extracted CSS into separate `main.css` file
 
 ### Fixed
-- Mini-map division error in `ui.js` (removed incorrect `y=Math.floor(i/World.H)` calculation)
-- Added comprehensive test coverage for boundary wrapping consistency
-- Verified RNG determinism and pattern cleanup behavior
+- **Inspector Panel Real-time Updates**: Added missing `refreshInspectorRealtime()` call to main animation loop
+- **Mini-map Division Bug**: Corrected coordinate calculation in `ui.js` (removed incorrect `y=Math.floor(i/World.H)` calculation)
+- **Test Suite Failures**: Resolved 12 test failures including missing functions, DOM mocking, and array initialization
+- **Test Infrastructure**: Added `assertNotEqual` method, enhanced DOM element mocking, fixed global references
+- Added comprehensive test coverage for boundary wrapping consistency, type pressure edge cases, and RNG determinism
 
 ### Investigated
 - **Nutrient Starvation Balance**: Confirmed energy formula imbalance affecting EAT archetype
