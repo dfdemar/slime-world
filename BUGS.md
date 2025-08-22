@@ -81,4 +81,4 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Status:** Fixed in refactoring - comprehensive tests added to prevent regression
 
 ---
-*Last updated: 2025-01-22*
+*Last updated: 2025-08-22*

@@ -19,9 +19,9 @@ class LegacyWrapper {
     static convertLegacyArchetype(legacyCode) {
         const legacy = Archetypes[legacyCode];
         const legacyBehavior = TypeBehavior[legacyCode];
-        
+
         if (!legacy || !legacyBehavior) return null;
-        
+
         return new Archetype(
             legacyCode,
             legacy.name,
@@ -64,15 +64,15 @@ function createUnifiedColony(type, x, y, parent = null) {
         if (modularColony) {
             modularColony.pattern = createPatternForColony(modularColony);
             World.colonies.push(modularColony);
-            
+
             const X = clamp(x, 0, World.W - 1), Y = clamp(y, 0, World.H - 1);
             const i = idx(X, Y);
             World.tiles[i] = modularColony.id;
             World.biomass[i] = Math.max(World.biomass[i] || 0, 0.4);
-            
+
             const behavior = modularColony.archetype.behaviors;
             Slime.trail[i] = (Slime.trail[i] || 0) + (behavior.deposit || 0.5);
-            
+
             return modularColony;
         }
         return null;
@@ -110,8 +110,8 @@ function mutateUnifiedTraits(traits, parentColony = null) {
 class PerformanceComparison {
     constructor() {
         this.metrics = {
-            legacy: { time: 0, calls: 0 },
-            modular: { time: 0, calls: 0 }
+            legacy: {time: 0, calls: 0},
+            modular: {time: 0, calls: 0}
         };
     }
 
@@ -119,17 +119,17 @@ class PerformanceComparison {
         const start = performance.now();
         const result = fn(...args);
         const end = performance.now();
-        
+
         this.metrics[name].time += (end - start);
         this.metrics[name].calls++;
-        
+
         return result;
     }
 
     getReport() {
         const legacy = this.metrics.legacy;
         const modular = this.metrics.modular;
-        
+
         return {
             legacy: {
                 totalTime: legacy.time,
@@ -146,8 +146,8 @@ class PerformanceComparison {
     }
 
     reset() {
-        this.metrics.legacy = { time: 0, calls: 0 };
-        this.metrics.modular = { time: 0, calls: 0 };
+        this.metrics.legacy = {time: 0, calls: 0};
+        this.metrics.modular = {time: 0, calls: 0};
     }
 }
 
@@ -158,18 +158,18 @@ const performanceComparison = new PerformanceComparison();
  */
 function runHybridComparison(colony, x, y) {
     if (!SystemConfig.hybridMode) return null;
-    
+
     const legacySuitability = performanceComparison.timeFunction('legacy', suitabilityAt, colony, x, y);
-    
+
     let modularSuitability = 0;
     if (colony.archetype) {
         modularSuitability = performanceComparison.timeFunction('modular', calculateModularSuitability, colony, x, y);
     }
-    
+
     if (SystemConfig.debugMode) {
         console.log(`Suitability comparison at (${x},${y}): Legacy=${legacySuitability.toFixed(3)}, Modular=${modularSuitability.toFixed(3)}`);
     }
-    
+
     return {
         legacy: legacySuitability,
         modular: modularSuitability,
@@ -220,7 +220,7 @@ class SystemMigration {
      */
     static validateConsistency() {
         const issues = [];
-        
+
         for (const colony of World.colonies) {
             // Check trait completeness
             const expectedTraits = Object.keys(TraitRegistry);
@@ -232,7 +232,7 @@ class SystemMigration {
                     issues.push(`Colony ${colony.id}: Trait ${traitName} out of range: ${colony.traits[traitName]}`);
                 }
             }
-            
+
             // Check archetype consistency
             if (SystemConfig.useModularTraits) {
                 if (!colony.archetype) {
@@ -242,7 +242,7 @@ class SystemMigration {
                 }
             }
         }
-        
+
         return issues;
     }
 }
@@ -252,10 +252,10 @@ class SystemMigration {
  */
 function stepUnifiedEcosystem() {
     const steps = Math.max(1, Math.floor(8 * World.speed));
-    
+
     for (let s = 0; s < steps; s++) {
         World.tick++;
-        
+
         // Environmental drift
         if (World.tick % 5 === 0) {
             const drift = 0.002 * World.speed;
@@ -264,21 +264,21 @@ function stepUnifiedEcosystem() {
                 World.env.light[i] = clamp(World.env.light[i] + randRange(World.rng, -drift, drift), 0, 1);
             }
         }
-        
+
         // Colony processing
         const cols = World.colonies;
         if (cols.length > 0) {
             for (let k = 0; k < cols.length; k++) {
                 const c = cols[(k + (World.tick % cols.length)) % cols.length];
                 if (!c) continue;
-                
+
                 c.age++;
-                
+
                 // Use unified suitability calculation
                 const clampedX = clamp(Math.round(c.x), 0, World.W - 1);
                 const clampedY = clamp(Math.round(c.y), 0, World.H - 1);
                 c.lastFit = calculateUnifiedSuitability(c, clampedX, clampedY);
-                
+
                 // Try expansion
                 if (!tryExpand(c)) {
                     const decay = (c.lastFit < 0.4) ? 0.985 : 0.992;
@@ -286,16 +286,16 @@ function stepUnifiedEcosystem() {
                 } else {
                     c.biomass = clamp(c.biomass + 0.01, 0, 3);
                 }
-                
+
                 // Reproduction
                 const pressure = World.typePressure[c.type] ?? 1;
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
-                
+
                 if (c.biomass > 0.8 && c.lastFit > 0.55 && Math.random() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
                     const bx = clamp(Math.round(c.x + dir[0] * 2), 0, World.W - 1);
                     const by = clamp(Math.round(c.y + dir[1] * 2), 0, World.H - 1);
-                    
+
                     const child = createUnifiedColony(c.type, bx, by, c);
                     if (child) {
                         c.kids.push(child.id);
@@ -303,8 +303,8 @@ function stepUnifiedEcosystem() {
                         if (World.tiles[bi] === -1) {
                             World.tiles[bi] = child.id;
                             World.biomass[bi] = 0.4;
-                            
-                            const behaviors = SystemConfig.useModularTraits && child.archetype ? 
+
+                            const behaviors = SystemConfig.useModularTraits && child.archetype ?
                                 child.archetype.behaviors : TypeBehavior[c.type];
                             Slime.trail[bi] += (behaviors?.deposit || 0.5);
                         }
@@ -312,12 +312,12 @@ function stepUnifiedEcosystem() {
                 }
             }
         }
-        
+
         // Standard ecosystem processes
         Slime.diffuseEvaporate();
         starvationSweep();
         nutrientDynamics();
-        
+
         if (World.tick % 30 === 0) updateTypePressure();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);

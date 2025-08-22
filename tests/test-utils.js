@@ -12,12 +12,12 @@ class TestRunner {
     }
 
     test(name, fn) {
-        this.tests.push({ name, fn });
+        this.tests.push({name, fn});
     }
 
     async run() {
         console.log(`Running ${this.tests.length} tests...`);
-        
+
         for (const test of this.tests) {
             try {
                 await test.fn();
@@ -25,7 +25,7 @@ class TestRunner {
                 console.log(`✅ ${test.name}`);
             } catch (error) {
                 this.results.failed++;
-                this.results.errors.push({ test: test.name, error });
+                this.results.errors.push({test: test.name, error});
                 console.error(`❌ ${test.name}:`, error.message);
             }
         }
@@ -102,7 +102,7 @@ function createTestWorld(width = 32, height = 24) {
     const oldW = World.W, oldH = World.H;
     World.W = width;
     World.H = height;
-    
+
     // Initialize minimal world state
     World.tiles = new Int32Array(width * height).fill(-1);
     World.biomass = new Float32Array(width * height).fill(0);
@@ -118,38 +118,44 @@ function createTestWorld(width = 32, height = 24) {
     World.tick = 0;
     World.rng = sfc32(1, 2, 3, 4); // Deterministic
     World.typePressure = {};
-    
+
     Slime.trail = new Float32Array(width * height).fill(0);
     Slime.trailNext = new Float32Array(width * height).fill(0);
-    
+
     // Mock notify function to prevent DOM errors during tests
     if (typeof window !== 'undefined' && !window.notify) {
-        window.notify = () => {}; // No-op during tests
+        window.notify = () => {
+        }; // No-op during tests
     }
-    
-    return { restore: () => { World.W = oldW; World.H = oldH; } };
+
+    return {
+        restore: () => {
+            World.W = oldW;
+            World.H = oldH;
+        }
+    };
 }
 
 function createTestColony(type = 'MAT', x = 5, y = 5) {
     if (!isValidType(type)) {
         throw new Error(`Invalid test colony type: ${type}`);
     }
-    
+
     const arch = Archetypes[type];
     const traits = {...arch.base};
     const color = 'hsl(120 80% 50%)';
     const id = World.nextId++;
-    
+
     return {
-        id, type, 
-        name: arch.name, 
+        id, type,
+        name: arch.name,
         species: 'Test Species',
-        x, y, color, traits, 
-        age: 0, 
-        biomass: 1.0, 
-        gen: 0, 
-        parent: null, 
-        kids: [], 
+        x, y, color, traits,
+        age: 0,
+        biomass: 1.0,
+        gen: 0,
+        parent: null,
+        kids: [],
         lastFit: 0,
         pattern: null
     };

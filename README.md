@@ -190,7 +190,3 @@ MIT License - see `LICENSE` file for details.
 ## Acknowledgments
 
 Inspired by the fascinating behavior of slime molds and the rich field of artificial life research. Special thanks to the biological systems that demonstrate how simple rules can generate complex, adaptive behaviors.
-
----
-
-*For technical details and development guidelines, see `CLAUDE.md`*
