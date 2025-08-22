@@ -20,4 +20,5 @@ node_modules/
 
 ## AI Tools
 CLAUDE.md
+.claude/
 .claude-code.json
