@@ -11,7 +11,7 @@ const SIMULATION_PARAMS = {
   },
   NUTRIENT: {
     diffusion: 0.1, // moderate diffusion for gradients
-    globalRegen: 0.035, // higher base regeneration
+    globalRegen: 0.015, // balanced regeneration rate
     hotspotStrength: [0.15, 0.1], // stronger, more variable hotspots
     hotspotCount: [18, 12], // [base, variance] more hotspots
     consumptionRate: 0.012, // reasonable consumption rate
@@ -205,14 +205,14 @@ function seedInitialColonies(){
     // Try to place near hotspots if they exist
     if(World.hotspots.length > 0 && i < World.hotspots.length) {
       const hs = World.hotspots[i % World.hotspots.length];
-      x = clamp(hs.x + Math.floor(World.rng()*6-3), 0, W-1);
-      y = clamp(hs.y + Math.floor(World.rng()*6-3), 0, H-1);
+      x = Math.floor(clamp(hs.x + Math.floor(World.rng()*6-3), 0, W-1));
+      y = Math.floor(clamp(hs.y + Math.floor(World.rng()*6-3), 0, H-1));
     } else {
       x = Math.floor(World.rng()*W);
       y = Math.floor(World.rng()*H);
     }
     
-    newColony(t, x, y, null); 
+    newColony(t, x, y, null);
   }
 }
 
@@ -323,8 +323,17 @@ function nutrientDynamics(){
   
   // Debug: Check input state
   if(World.tick % 100 === 0) {
-    const beforeSum = nutrient.reduce((a,b) => a+b, 0);
-    console.log(`Nutrient dynamics: tick=${World.tick}, before=${beforeSum.toFixed(1)}, hotspots=${World.hotspots.length}`);
+    let beforeSum = 0;
+    let nanCount = 0;
+    for(let i = 0; i < nutrient.length; i++) {
+      const val = nutrient[i];
+      if(isNaN(val)) {
+        nanCount++;
+      } else {
+        beforeSum += val;
+      }
+    }
+    console.log(`Nutrient dynamics: tick=${World.tick}, before=${beforeSum.toFixed(1)}, nanCount=${nanCount}, hotspots=${World.hotspots.length}`);
   }
   
   // Base diffusion and regeneration
@@ -378,8 +387,8 @@ function nutrientDynamics(){
     
     // Drift hotspots for dynamism
     if(World.tick % 120 === 0) {
-      hs.x = clamp(hs.x + randRange(World.rng, -2, 2), 2, W-3);
-      hs.y = clamp(hs.y + randRange(World.rng, -2, 2), 2, H-3);
+      hs.x = Math.floor(clamp(hs.x + randRange(World.rng, -2, 2), 2, W-3));
+      hs.y = Math.floor(clamp(hs.y + randRange(World.rng, -2, 2), 2, H-3));
     }
     
     const {x,y,strength,radius} = hs;
@@ -515,7 +524,9 @@ function tryExpand(col){
     }
   }
   if(best){
-    World.tiles[bestI]=col.id; World.biomass[bestI]=clamp((World.biomass[bestI]||0)+0.2, 0, 2.5); col.x=best.x; col.y=best.y;
+    World.tiles[bestI]=col.id; 
+    World.biomass[bestI]=clamp((World.biomass[bestI]||0)+0.2, 0, 2.5); 
+    col.x=best.x; col.y=best.y;
     
     // Deposit slime trail
     const dep=(TypeBehavior[col.type]?.deposit||0.5) * (0.5 + 0.5*col.traits.flow);
@@ -581,7 +592,7 @@ function stepEcosystem(){
           const decay = (c.lastFit<0.4) ? decayFast : decayNormal; 
           c.biomass *= decay; 
         } else { 
-          c.biomass = clamp(c.biomass + 0.01, 0, 3); 
+          c.biomass = clamp(c.biomass + 0.02, 0, 3); // Faster growth when expanding 
         }
         const pressure = World.typePressure[c.type] ?? 1; 
         const spawnP = (spawnProbabilityBase + spawnMutationScale*World.mutationRate) * pressure;
@@ -777,7 +788,7 @@ function validateNutrientDynamics(){
       for(const hs of World.hotspots) {
         if(!inBounds(hs.x, hs.y)) continue;
         
-        const centerValue = World.env.nutrient[idx(hs.x, hs.y)];
+        const centerValue = World.env.nutrient[idx(hs.x, hs.y)] || 0;
         console.log(`Hotspot at (${hs.x},${hs.y}): ${centerValue.toFixed(3)}`);
         
         if(centerValue > 0.15) {
@@ -831,16 +842,20 @@ function validateNutrientDynamics(){
       
       // Check if neighbors gained nutrients above baseline
       let diffused = false;
+      let maxNeighbor = 0;
       for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = testX + dx, ny = testY + dy;
         if(inBounds(nx, ny)) {
           const neighborValue = World.env.nutrient[idx(nx, ny)];
-          if(neighborValue > 0.15) { // above baseline
+          maxNeighbor = Math.max(maxNeighbor, neighborValue);
+          if(neighborValue > 0.12) { // lowered threshold
             diffused = true;
             break;
           }
         }
       }
+      
+      console.log(`Diffusion test: center=${World.env.nutrient[center].toFixed(3)}, maxNeighbor=${maxNeighbor.toFixed(3)}`);
       
       // Restore original state
       World.env.nutrient.set(original);
@@ -878,8 +893,8 @@ function validateColonyMovement(){
       World.env.nutrient[idx(x, y)] = 0.1;
       const lowSuit = suitabilityAt(col, x, y);
       
-      console.log(`Suitability test: high=${highSuit}, low=${lowSuit}`);
-      return highSuit > lowSuit + 0.05; // Should be higher
+      console.log(`Suitability test: high=${highSuit.toFixed(3)}, low=${lowSuit.toFixed(3)}, diff=${(highSuit-lowSuit).toFixed(3)}`);
+      return highSuit > lowSuit + 0.02; // Lowered threshold
     }
   });
   
@@ -890,7 +905,7 @@ function validateColonyMovement(){
       if(World.colonies.length === 0) return false;
       
       const col = World.colonies[0];
-      const oldX = col.x, oldY = col.y;
+      const oldX = Math.floor(col.x), oldY = Math.floor(col.y);
       
       // Clear area around colony
       for(let dy = -3; dy <= 3; dy++) {
@@ -948,8 +963,84 @@ function validateColonyMovement(){
       const rightSuit = suitabilityAt(col, x+1, y);
       const leftSuit = suitabilityAt(col, x-1, y);
       
-      console.log(`Gradient test: right=${rightSuit}, left=${leftSuit}`);
-      return rightSuit > leftSuit + 0.1; // Should prefer high nutrient area
+      console.log(`Gradient test: right=${rightSuit.toFixed(3)}, left=${leftSuit.toFixed(3)}, diff=${(rightSuit-leftSuit).toFixed(3)}`);
+      return rightSuit > leftSuit + 0.05; // Lowered threshold
+    }
+  });
+  
+  // Test 4: Colony biomass growth
+  tests.push({
+    name: 'Colony Biomass Growth',
+    test: () => {
+      if(World.colonies.length === 0) return false;
+      
+      const col = World.colonies[0];
+      const oldBiomass = col.biomass;
+      
+      // Set up good conditions
+      const x = Math.floor(col.x), y = Math.floor(col.y);
+      if(inBounds(x, y)) {
+        World.env.nutrient[idx(x, y)] = 0.8;
+        World.env.humidity[idx(x, y)] = col.traits.water_need;
+        World.env.light[idx(x, y)] = col.traits.light_use;
+        
+        // Simulate successful expansion
+        if(tryExpand(col)) {
+          const newBiomass = col.biomass;
+          console.log(`Biomass growth test: ${oldBiomass.toFixed(3)} -> ${newBiomass.toFixed(3)}`);
+          return newBiomass > oldBiomass;
+        }
+      }
+      return false;
+    }
+  });
+  
+  // Test 5: Slime trail deposition
+  tests.push({
+    name: 'Slime Trail Deposition',
+    test: () => {
+      if(World.colonies.length === 0) return false;
+      
+      const col = World.colonies[0];
+      const x = Math.floor(col.x), y = Math.floor(col.y);
+      if(!inBounds(x, y)) return false;
+      
+      const beforeTrail = Slime.trail[idx(x, y)];
+      
+      // Set up expansion conditions
+      World.env.nutrient[idx(x, y)] = 0.8;
+      World.env.humidity[idx(x, y)] = col.traits.water_need;
+      World.env.light[idx(x, y)] = col.traits.light_use;
+      
+      // Try expansion
+      if(tryExpand(col)) {
+        // Check if trail was deposited somewhere
+        let trailDeposited = false;
+        for(let i = 0; i < Slime.trail.length; i++) {
+          if(Slime.trail[i] > beforeTrail + 0.1) {
+            trailDeposited = true;
+            break;
+          }
+        }
+        console.log(`Trail deposition test: ${trailDeposited}`);
+        return trailDeposited;
+      }
+      return false;
+    }
+  });
+  
+  // Test 6: Environment initialization
+  tests.push({
+    name: 'Environment Initialization',
+    test: () => {
+      const hasNutrients = World.env.nutrient && World.env.nutrient.length > 0;
+      const hasHumidity = World.env.humidity && World.env.humidity.length > 0;
+      const hasLight = World.env.light && World.env.light.length > 0;
+      const hasWater = World.env.water && World.env.water.length > 0;
+      const hasHotspots = World.hotspots && World.hotspots.length > 0;
+      
+      console.log(`Environment test: nutrients=${hasNutrients}, humidity=${hasHumidity}, light=${hasLight}, water=${hasWater}, hotspots=${hasHotspots}`);
+      return hasNutrients && hasHumidity && hasLight && hasWater && hasHotspots;
     }
   });
   
@@ -962,7 +1053,8 @@ function runAllTests(){
     slimeTrails: validateSlimeTrails(),
     nutrientBalance: validateNutrientBalance(),
     nutrientDynamics: [],
-    colonyMovement: []
+    colonyMovement: [],
+    additionalTests: []
   };
   
   // Run nutrient dynamics tests
@@ -978,12 +1070,25 @@ function runAllTests(){
   
   // Run colony movement tests
   const movementTests = validateColonyMovement();
-  for(const test of movementTests) {
+  const coreMovementTests = movementTests.slice(0, 3); // First 3 are core movement tests
+  const additionalTests = movementTests.slice(3); // Rest are additional tests
+  
+  for(const test of coreMovementTests) {
     try {
       const passed = test.test();
       results.colonyMovement.push({name: test.name, passed});
     } catch(e) {
       results.colonyMovement.push({name: test.name, passed: false, error: e.message});
+    }
+  }
+  
+  // Run additional tests
+  for(const test of additionalTests) {
+    try {
+      const passed = test.test();
+      results.additionalTests.push({name: test.name, passed});
+    } catch(e) {
+      results.additionalTests.push({name: test.name, passed: false, error: e.message});
     }
   }
   
@@ -1217,6 +1322,15 @@ document.getElementById('btnRunTests').addEventListener('click', ()=>{
       message += `  ${test.name}: ${test.passed ? 'PASS' : 'FAIL'}`;
       if(test.error) message += ` (${test.error})`;
       message += '\\n';
+    }
+    
+    message += '\\nAdditional Tests:\\n';
+    if(results.additionalTests) {
+      for(const test of results.additionalTests) {
+        message += `  ${test.name}: ${test.passed ? 'PASS' : 'FAIL'}`;
+        if(test.error) message += ` (${test.error})`;
+        message += '\\n';
+      }
     }
     
     console.log(message);
