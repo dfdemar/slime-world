@@ -44,6 +44,15 @@ function initializeCanvasEvents() {
             btn.classList.add('spawn-active');
             spawnPending = btn.getAttribute('data-spawn');
         });
+
+        // Archetype tooltip functionality
+        btn.addEventListener('mouseenter', () => {
+            showArchetypeTooltip(btn.getAttribute('data-archetype'));
+        });
+
+        btn.addEventListener('mouseleave', () => {
+            hideArchetypeTooltip();
+        });
     });
 
     canvasEl.addEventListener('click', (e) => {
@@ -53,7 +62,7 @@ function initializeCanvasEvents() {
         if (spawnPending) {
             const created = newColony(spawnPending, x, y, null);
             if (created) {
-                refreshLegend();
+                refreshLiveStats();
                 updateInspector(created);
             }
             return;
@@ -120,6 +129,10 @@ function initializeControlEvents() {
     document.getElementById('btnOverlayCollapse').addEventListener('click', () => {
         const el = document.getElementById('overlay');
         el.classList.toggle('collapsed');
+    });
+    
+    document.getElementById('btnCloseInspector').addEventListener('click', () => {
+        updateInspector(null);
     });
 
     document.getElementById('btnTests').addEventListener('click', runTests);

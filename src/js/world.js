@@ -69,5 +69,5 @@ function setupWorld(seed, sizeStr) {
     buildEnvironment();
     seedInitialColonies();
     updateTypePressure();
-    refreshLegend();
+    refreshLiveStats();
 }
