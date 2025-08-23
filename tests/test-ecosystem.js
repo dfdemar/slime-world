@@ -182,7 +182,7 @@ function runEcosystemTests() {
     runner.test('Starvation balance - energy calculation fairness across archetypes', () => {
         const restore = createTestWorld(10, 10);
 
-        // Test each archetype under identical poor conditions
+        // Test each archetype under identical moderate conditions
         const testResults = {};
         const testConditions = {
             nutrient: 0.3,  // Moderate nutrients
@@ -198,52 +198,54 @@ function runEcosystemTests() {
             World.env.light[pos] = testConditions.light;
             World.biomass[pos] = 1.0;
 
-            // Calculate energy using starvation formula
+            // Calculate energy using enhanced starvation formula (including non-photo bonus)
             const photosym = colony.traits.photosym || 0;
-            const energy = 0.7 * testConditions.nutrient + 0.3 * photosym * testConditions.light;
+            const nonPhotoBonus = photosym < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - photosym * 10) : 0;
+            const energy = 0.7 * testConditions.nutrient + 0.3 * photosym * testConditions.light + nonPhotoBonus * testConditions.nutrient;
 
             testResults[archetypeCode] = {
                 photosym: photosym,
                 energy: energy,
+                nonPhotoBonus: nonPhotoBonus,
                 survives: energy >= 0.35
             };
         }
 
-        // Analyze results for balance issues
+        // Analyze results for balance improvements
         const survivors = Object.values(testResults).filter(r => r.survives).length;
         const totalTypes = Object.keys(Archetypes).length;
 
-        // This test documents the current balance issue: moderate conditions kill ALL archetypes
-        runner.assertEqual(survivors, 0, 'Current balance issue: moderate conditions (0.3 nutrient, 0.3 light) kill all archetypes');
+        // With the fix, EAT archetype should now survive moderate conditions
+        runner.assert(testResults.EAT.survives, 'EAT archetype should survive moderate conditions (0.3 nutrient, 0.3 light) due to non-photosynthetic bonus');
+        runner.assertGreaterThan(testResults.EAT.nonPhotoBonus, 0, 'EAT should receive non-photosynthetic bonus');
 
-        // Verify that with better conditions some would survive
-        const betterResults = {};
-        for (const archetypeCode of Object.keys(Archetypes)) {
+        // Verify that photosynthetic types don't get the non-photo bonus
+        runner.assertEqual(testResults.TOWER.nonPhotoBonus, 0, 'High photosynthetic types should not receive non-photo bonus');
+
+        // Check balance: non-photosynthetic types should have advantage in moderate light, nutrient-rich conditions
+        const eatEnergy = testResults.EAT.energy;
+        const towerEnergy = testResults.TOWER.energy;
+        
+        // EAT should have advantage over TOWER in moderate light conditions (its ecological niche)
+        runner.assertGreaterThan(eatEnergy, towerEnergy, 'EAT should have energy advantage in moderate light conditions');
+        
+        // But advantage shouldn't be excessive (within reasonable ecological balance)
+        const energyRatio = eatEnergy / towerEnergy;
+        runner.assertLessThan(energyRatio, 2.0, 'EAT energy advantage should not be excessive');
+
+        // Test reverse scenario: TOWER should have advantage in high-light conditions
+        const highLightResults = {};
+        const highLightConditions = {nutrient: 0.3, light: 0.8}; // High light, moderate nutrients
+        
+        for (const archetypeCode of ['EAT', 'TOWER']) {
             const colony = createTestColony(archetypeCode, 5, 5);
             const photosym = colony.traits.photosym || 0;
-            const betterEnergy = 0.7 * 0.6 + 0.3 * photosym * 0.5; // Better nutrients (0.6), moderate light (0.5)
-            betterResults[archetypeCode] = betterEnergy >= 0.35;
+            const nonPhotoBonus = photosym < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - photosym * 10) : 0;
+            const energy = 0.7 * highLightConditions.nutrient + 0.3 * photosym * highLightConditions.light + nonPhotoBonus * highLightConditions.nutrient;
+            highLightResults[archetypeCode] = energy;
         }
-        const betterSurvivors = Object.values(betterResults).filter(r => r).length;
-        runner.assertGreaterThan(betterSurvivors, 0, 'With better nutrients (0.6), some archetypes should survive');
-
-        // Check if photosynthetic types have unfair advantage
-        const highPhotosym = Object.entries(testResults)
-            .filter(([code, result]) => result.photosym > 0.5)
-            .map(([code, result]) => ({code, ...result}));
-
-        const lowPhotosym = Object.entries(testResults)
-            .filter(([code, result]) => result.photosym <= 0.2)
-            .map(([code, result]) => ({code, ...result}));
-
-        if (highPhotosym.length > 0 && lowPhotosym.length > 0) {
-            const avgHighEnergy = highPhotosym.reduce((sum, r) => sum + r.energy, 0) / highPhotosym.length;
-            const avgLowEnergy = lowPhotosym.reduce((sum, r) => sum + r.energy, 0) / lowPhotosym.length;
-
-            // Energy difference shouldn't be too extreme
-            const energyRatio = avgHighEnergy / avgLowEnergy;
-            runner.assertLessThan(energyRatio, 2.5, 'Photosynthetic advantage should not be excessive');
-        }
+        
+        runner.assertGreaterThan(highLightResults.TOWER, highLightResults.EAT, 'TOWER should have energy advantage in high-light conditions');
 
         restore.restore();
     });
@@ -269,10 +271,12 @@ function runEcosystemTests() {
         runner.assertNotEqual(World.tiles[idx(5, 5)], -1, 'EAT colony should survive on nutrients alone');
         runner.assertGreaterThan(World.biomass[idx(5, 5)], 0.05, 'EAT colony should maintain biomass');
 
-        // Should actually grow with good nutrients
-        const energy = 0.7 * 0.6 + 0.3 * 0 * 0.1; // photosym = 0 for EAT
+        // Should actually grow with good nutrients (including non-photo bonus)
+        const photosym = 0; // EAT has photosym = 0
+        const nonPhotoBonus = photosym < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - photosym * 10) : 0;
+        const energy = 0.7 * 0.6 + 0.3 * photosym * 0.1 + nonPhotoBonus * 0.6;
         if (energy > 0.35) {
-            runner.assertGreaterThan(World.biomass[idx(5, 5)], initialBiomass * 0.99, 'EAT should grow with good nutrients');
+            runner.assertGreaterThan(World.biomass[idx(5, 5)], initialBiomass * 0.99, 'EAT should grow with good nutrients and non-photo bonus');
         }
 
         restore.restore();
@@ -333,11 +337,18 @@ function runEcosystemTests() {
         ];
 
         for (const testCase of testCases) {
-            const actualEnergy = 0.7 * testCase.nutrient + 0.3 * testCase.photosym * testCase.light;
+            // Include non-photo bonus in energy calculation
+            const nonPhotoBonus = testCase.photosym < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - testCase.photosym * 10) : 0;
+            const actualEnergy = 0.7 * testCase.nutrient + 0.3 * testCase.photosym * testCase.light + nonPhotoBonus * testCase.nutrient;
+            
+            // Adjust expected energy for non-photosynthetic bonus
+            const expectedEnergy = testCase.photosym < 0.1 ? 
+                testCase.expectedEnergy + nonPhotoBonus * testCase.nutrient : 
+                testCase.expectedEnergy;
 
             runner.assertApproxEqual(
                 actualEnergy,
-                testCase.expectedEnergy,
+                expectedEnergy,
                 0.01,
                 `Energy calculation for ${testCase.description}`
             );

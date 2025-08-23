@@ -3,10 +3,27 @@ let needRedraw = true;
 let stepping = false;
 let last = 0;
 
+function formatAge(ticks) {
+    // Convert simulation ticks to more meaningful time units
+    // Assuming 1 tick = ~1 hour in simulation time
+    if (ticks < 24) {
+        return ticks + (ticks === 1 ? ' hour' : ' hours');
+    } else if (ticks < 24 * 7) {
+        const days = Math.floor(ticks / 24);
+        const hours = ticks % 24;
+        return days + (days === 1 ? ' day' : ' days') + (hours > 0 ? ', ' + hours + 'h' : '');
+    } else {
+        const weeks = Math.floor(ticks / (24 * 7));
+        const days = Math.floor((ticks % (24 * 7)) / 24);
+        return weeks + (weeks === 1 ? ' week' : ' weeks') + (days > 0 ? ', ' + days + 'd' : '');
+    }
+}
+
 function loop(ts) {
     last = ts;
     if (!World.paused || stepping) {
         stepEcosystem();
+        refreshLiveStats(); // Update live stats after each simulation step
         needRedraw = true;
         stepping = false;
     }
@@ -45,12 +62,21 @@ function colonyAtCanvas(px, py) {
 let selectedId = null;
 
 function updateInspector(c) {
+    const overlay = document.getElementById('overlay');
     const el = document.getElementById('inspector');
     const stats = document.getElementById('stats');
     const rt = document.getElementById('rtStats');
+    const actions = document.getElementById('inspectorActions');
+    const tilePreview = document.getElementById('tilePreview');
+    
     if (!c) {
+        // Hide inspector when no colony is selected
+        overlay.classList.add('hidden');
+        overlay.classList.remove('collapsed');
         el.textContent = 'Click a colony to inspect.';
         stats.innerHTML = '';
+        actions.style.display = 'none';
+        tilePreview.style.display = 'none';
         selectedId = null;
         const mv = document.getElementById('miniView');
         if (mv) {
@@ -58,8 +84,11 @@ function updateInspector(c) {
             mctx.clearRect(0, 0, mv.width, mv.height);
         }
         if (rt) rt.innerHTML = '';
-        return
+        return;
     }
+
+    // Show inspector when a colony is selected
+    overlay.classList.remove('hidden', 'collapsed');
     selectedId = c.id;
     const name = (c?.name) || (Archetypes[c?.type]?.name) || (c?.type) || 'Unknown';
     el.innerHTML = '<div style="display:flex; align-items:center; gap:8px;">' +
@@ -67,10 +96,10 @@ function updateInspector(c) {
         '<div>' +
         '<b>' + name + '</b> <span class="small">(#' + c.id + ')</span><br/>' +
         '<span class="small italic">Species: ' + (c.species || '—') + '</span><br/>' +
-        '<span class="small">Gen ' + c.gen + ' • Age ' + c.age + '</span>' +
+        '<span class="small">Gen ' + c.gen + ' • Age <span id="inspectorAge">' + formatAge(c.age) + '</span></span>' +
         '</div>' +
         '</div>' +
-        '<div style="margin-top:6px" class="small">Parent: ' + (c.parent ?? '—') + ' • Kids: ' + c.kids.length + '</div>';
+        '<div style="margin-top:6px" class="small">Parent: ' + (c.parent ?? '—') + ' • Kids: <span id="inspectorKids">' + c.kids.length + '</span></div>';
 
     function bar(label, val) {
         const w = Math.round(100 * clamp(val, 0, 1));
@@ -78,6 +107,26 @@ function updateInspector(c) {
     }
 
     stats.innerHTML = bar('Water Need', c.traits.water_need) + bar('Light Use', c.traits.light_use) + bar('Photosymbiosis', c.traits.photosym) + bar('Transport', c.traits.transport) + bar('Predation', c.traits.predation) + bar('Defense', c.traits.defense) + bar('Spore Rate', c.traits.spore) + bar('Flow', c.traits.flow);
+    
+    // Add action buttons
+    actions.innerHTML = `
+        <div class="btn-group" style="margin-top: 8px;">
+            <button id="btnKillColony" class="btn-danger" title="Kill this colony">Kill</button>
+            <button id="btnSplitColony" class="btn-primary" title="Split this colony in two">Split</button>
+            <button id="btnRandomizeColony" title="Randomize color and pattern">🎨 Randomize</button>
+        </div>
+    `;
+    actions.style.display = 'block';
+    
+    // Add event listeners for action buttons
+    document.getElementById('btnKillColony').onclick = () => killColony(c.id);
+    document.getElementById('btnSplitColony').onclick = () => splitColony(c.id);
+    document.getElementById('btnRandomizeColony').onclick = () => randomizeColonyAppearance(c.id);
+    
+    // Render tile preview
+    renderTilePreview(c);
+    tilePreview.style.display = 'block';
+    
     refreshInspectorRealtime(true);
 }
 
@@ -92,6 +141,16 @@ function refreshInspectorRealtime(force = false) {
     if (!col) {
         rt.innerHTML = '';
         return;
+    }
+    
+    // Update real-time age and kids count
+    const ageElement = document.getElementById('inspectorAge');
+    const kidsElement = document.getElementById('inspectorKids');
+    if (ageElement) {
+        ageElement.textContent = formatAge(col.age);
+    }
+    if (kidsElement) {
+        kidsElement.textContent = col.kids.length;
     }
     let tiles = 0, mass = 0, fit = 0, minFit = 1, maxFit = 0;
     for (let i = 0; i < World.tiles.length; i++) {
@@ -111,36 +170,278 @@ function refreshInspectorRealtime(force = false) {
         + '<div class="kv"><div class="k">Avg Suit</div><div class="v">' + fit.toFixed(2) + '</div><div class="k">Fit Range</div><div class="v">' + minFit.toFixed(2) + '–' + maxFit.toFixed(2) + '</div></div>';
     // mini view
     const mv = document.getElementById('miniView');
-    const mctx = mv.getContext('2d');
-    mctx.clearRect(0, 0, mv.width, mv.height);
-    mctx.fillStyle = '#0a1326';
-    mctx.fillRect(0, 0, mv.width, mv.height);
-    mctx.fillStyle = '#9fb4ff';
-    const sx = mv.width / World.W, sy = mv.height / World.H;
-    for (let i = 0; i < World.tiles.length; i++) {
-        if (World.tiles[i] === col.id) {
-            const x = (i % World.W), y = Math.floor(i / World.W);
-            mctx.globalAlpha = 0.8;
-            mctx.fillRect(x * sx, y * sy, Math.max(1, sx), Math.max(1, sy));
+    if (mv) {
+        const mctx = mv.getContext('2d');
+        if (mctx) {
+            mctx.clearRect(0, 0, mv.width, mv.height);
+            mctx.fillStyle = '#0a1326';
+            mctx.fillRect(0, 0, mv.width, mv.height);
+            mctx.fillStyle = '#9fb4ff';
+            const sx = mv.width / World.W, sy = mv.height / World.H;
+            for (let i = 0; i < World.tiles.length; i++) {
+                if (World.tiles[i] === col.id) {
+                    const x = (i % World.W), y = Math.floor(i / World.W);
+                    mctx.globalAlpha = 0.8;
+                    mctx.fillRect(x * sx, y * sy, Math.max(1, sx), Math.max(1, sy));
+                }
+            }
         }
     }
 }
 
-/* ===== Legend & Misc ===== */
-function refreshLegend() {
-    const legend = document.getElementById('legend');
-    legend.innerHTML = '';
-    const sorted = [...World.colonies].slice(-10).reverse();
-    for (const c of sorted) {
-        const chip = document.createElement('div');
-        chip.className = 'chip';
-        const d = document.createElement('div');
-        d.className = 'dot';
-        d.style.background = c.color;
-        chip.appendChild(d);
-        const label = (c.species || c.name || Archetypes[c.type]?.name || c.type || 'Unknown') + ' #' + c.id;
-        chip.appendChild(document.createTextNode(label));
-        legend.appendChild(chip);
+/* ===== Live Stats & Metrics ===== */
+let lastTickTime = 0;
+let ticksInSecond = [];
+
+function refreshLiveStats() {
+    // Track tick rate
+    const now = performance.now();
+    if (lastTickTime > 0) {
+        ticksInSecond.push(now);
+        ticksInSecond = ticksInSecond.filter(t => now - t < 1000);
+    }
+    lastTickTime = now;
+
+    // Update colony count
+    document.getElementById('statColonies').textContent = World.colonies.length;
+
+    // Calculate total biomass
+    let totalBiomass = 0;
+    for (let i = 0; i < World.biomass.length; i++) {
+        totalBiomass += World.biomass[i];
+    }
+    document.getElementById('statBiomass').textContent = totalBiomass.toFixed(1);
+
+    // Update tick rate
+    const tickRate = ticksInSecond.length;
+    document.getElementById('statTickRate').textContent = tickRate + '/s';
+
+    // Update max generation
+    const maxGen = World.colonies.reduce((max, c) => Math.max(max, c.gen || 0), 0);
+    document.getElementById('statMaxGen').textContent = maxGen;
+
+    // Update archetype breakdown
+    const breakdown = {};
+    World.colonies.forEach(c => {
+        const type = c.type || 'Unknown';
+        if (!breakdown[type]) {
+            breakdown[type] = { count: 0, color: c.color, name: Archetypes[type]?.name || type };
+        }
+        breakdown[type].count++;
+    });
+
+    const breakdownList = document.getElementById('breakdownList');
+    breakdownList.innerHTML = '';
+    
+    Object.entries(breakdown)
+        .sort(([,a], [,b]) => b.count - a.count)
+        .forEach(([type, data]) => {
+            const item = document.createElement('div');
+            item.className = 'breakdown-item';
+            
+            const name = document.createElement('div');
+            name.className = 'breakdown-name';
+            
+            const dot = document.createElement('div');
+            dot.className = 'breakdown-dot';
+            dot.style.background = data.color;
+            
+            name.appendChild(dot);
+            name.appendChild(document.createTextNode(data.name));
+            
+            const count = document.createElement('div');
+            count.className = 'breakdown-count';
+            count.textContent = data.count;
+            
+            item.appendChild(name);
+            item.appendChild(count);
+            breakdownList.appendChild(item);
+        });
+}
+
+/* ===== Archetype Tooltips ===== */
+function showArchetypeTooltip(archetypeCode) {
+    const archetype = Archetypes[archetypeCode];
+    if (!archetype) return;
+
+    const tooltip = document.getElementById('archetypeTooltip');
+    const title = document.getElementById('tooltipTitle');
+    const traits = document.getElementById('tooltipTraits');
+
+    title.textContent = archetype.name + ' (' + archetype.code + ')';
+    
+    traits.innerHTML = '';
+    Object.entries(archetype.base).forEach(([trait, value]) => {
+        const row = document.createElement('div');
+        row.className = 'trait-row';
+        
+        const name = document.createElement('span');
+        name.className = 'trait-name';
+        name.textContent = trait.replace('_', ' ');
+        
+        const val = document.createElement('span');
+        val.className = 'trait-value';
+        val.textContent = Math.round(value * 100) + '%';
+        
+        row.appendChild(name);
+        row.appendChild(val);
+        traits.appendChild(row);
+    });
+    
+    tooltip.style.display = 'block';
+}
+
+function hideArchetypeTooltip() {
+    const tooltip = document.getElementById('archetypeTooltip');
+    tooltip.style.display = 'none';
+}
+
+/* ===== Inspector Actions ===== */
+function killColony(colonyId) {
+    if (!confirm('Are you sure you want to kill this colony? This action cannot be undone.')) {
+        return;
+    }
+    
+    const colony = World.colonies.find(c => c.id === colonyId);
+    if (!colony) {
+        notify('Colony not found', 'error', 2000);
+        return;
+    }
+
+    // Remove all tiles belonging to this colony
+    for (let i = 0; i < World.tiles.length; i++) {
+        if (World.tiles[i] === colonyId) {
+            World.tiles[i] = -1;
+            World.biomass[i] = 0;
+        }
+    }
+
+    // Remove colony from world
+    World.colonies = World.colonies.filter(c => c.id !== colonyId);
+    
+    // Remove this colony from parent's children list
+    if (colony.parent) {
+        const parent = World.colonies.find(c => c.id === colony.parent);
+        if (parent) {
+            parent.kids = parent.kids.filter(id => id !== colonyId);
+        }
+    }
+
+    // Close inspector since colony is dead
+    updateInspector(null);
+    refreshLiveStats();
+    
+    notify(`${colony.name} colony eliminated`, 'warn', 1500);
+}
+
+function splitColony(colonyId) {
+    const parentColony = World.colonies.find(c => c.id === colonyId);
+    if (!parentColony) {
+        notify('Colony not found', 'error', 2000);
+        return;
+    }
+
+    // Find all tiles belonging to the parent colony
+    const parentTiles = [];
+    for (let i = 0; i < World.tiles.length; i++) {
+        if (World.tiles[i] === colonyId) {
+            const x = i % World.W;
+            const y = Math.floor(i / World.W);
+            parentTiles.push({x, y, index: i});
+        }
+    }
+
+    if (parentTiles.length < 2) {
+        notify('Colony too small to split', 'error', 2000);
+        return;
+    }
+
+    // Split tiles roughly in half
+    const halfSize = Math.ceil(parentTiles.length / 2);
+    const childTiles = parentTiles.slice(halfSize);
+    
+    // Create child colony at first child tile location
+    const firstChildTile = childTiles[0];
+    const childColony = newColony(parentColony.type, firstChildTile.x, firstChildTile.y, parentColony);
+    
+    if (!childColony) {
+        notify('Failed to create child colony', 'error', 2000);
+        return;
+    }
+
+    // Reset the child's age to 0 as specified
+    childColony.age = 0;
+
+    // Reassign child tiles to the new colony
+    childTiles.forEach(tile => {
+        World.tiles[tile.index] = childColony.id;
+        // Split biomass between parent and child
+        const currentBiomass = World.biomass[tile.index];
+        World.biomass[tile.index] = currentBiomass * 0.6; // Child gets 60% of biomass
+    });
+
+    // Reduce parent biomass on remaining tiles
+    parentTiles.slice(0, halfSize).forEach(tile => {
+        World.biomass[tile.index] *= 0.8; // Parent retains 80% of biomass
+    });
+
+    updateInspector(parentColony); // Refresh inspector for parent
+    refreshLiveStats();
+    
+    notify(`${parentColony.name} split into parent (#${parentColony.id}) and child (#${childColony.id})`, 'good', 2000);
+}
+
+function randomizeColonyAppearance(colonyId) {
+    const colony = World.colonies.find(c => c.id === colonyId);
+    if (!colony) {
+        notify('Colony not found', 'error', 2000);
+        return;
+    }
+
+    // Generate new color and pattern
+    colony.color = randomColorVivid();
+    colony.pattern = createPatternForColony(colony);
+
+    // Update inspector to show new appearance
+    updateInspector(colony);
+    
+    notify('Colony appearance randomized', 'good', 1000);
+}
+
+function renderTilePreview(colony) {
+    const canvas = document.getElementById('tileCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Fill with colony color
+    ctx.fillStyle = colony.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Apply the colony's pattern at a large scale
+    if (colony.pattern) {
+        ctx.globalAlpha = 0.8;
+        ctx.globalCompositeOperation = 'overlay';
+        
+        // Scale the 8x8 pattern to fill the 80x80 canvas
+        const scaleX = canvas.width / colony.pattern.width;
+        const scaleY = canvas.height / colony.pattern.height;
+        
+        for (let y = 0; y < Math.ceil(scaleY); y++) {
+            for (let x = 0; x < Math.ceil(scaleX); x++) {
+                ctx.drawImage(
+                    colony.pattern,
+                    x * colony.pattern.width,
+                    y * colony.pattern.height,
+                    colony.pattern.width,
+                    colony.pattern.height
+                );
+            }
+        }
+        
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
     }
 }
 
@@ -194,7 +495,7 @@ function loadJSON(e) {
             World.colonies = data.colonies.map(c => ({...c, pattern: createPatternForColony(c)}));
             World.nextId = data.nextId;
             World.tick = data.tick;
-            refreshLegend();
+            refreshLiveStats();
             draw();
             notify('Loaded save', 'warn', 1000);
         } catch (err) {

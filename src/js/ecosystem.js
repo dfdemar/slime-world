@@ -1,4 +1,8 @@
 /* ===== Balance & Starvation ===== */
+
+// Energy calculation constants
+window.NON_PHOTOSYNTHETIC_BONUS = 0.5; // Bonus nutrient efficiency for non-photosynthetic archetypes
+const NON_PHOTOSYNTHETIC_BONUS = window.NON_PHOTOSYNTHETIC_BONUS;
 function updateTypePressure() {
     const counts = {MAT: 0, CORD: 0, TOWER: 0, FLOAT: 0, EAT: 0, SCOUT: 0};
     const idToType = new Map();
@@ -39,7 +43,9 @@ function starvationSweep() {
             continue;
         }
         const n = nutrient[i], l = light[i], ps = col.traits.photosym || 0;
-        const energy = 0.7 * n + 0.3 * ps * l;
+        // Enhanced energy formula: give non-photosynthetic archetypes bonus nutrient efficiency
+        const nonPhotoBonus = ps < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - ps * 10) : 0; // Bonus decreases as photosym increases
+        const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
         const cons = Math.min(n, 0.008 * Math.max(0.1, World.biomass[i]));
         nutrient[i] = clamp(n - cons, 0, 1);
         if (energy < 0.35) {

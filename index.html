@@ -9,7 +9,7 @@
 <body>
 <header>
     <h1>Slimeworld Evolution Simulator</h1>
-    <span class="pill">v2.3 • patterns + live inspector</span>
+    <span class="pill">v2.5 • UI redesign + enhanced inspector</span>
     <span id="status" class="small"></span>
     <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
         <button id="btnPause">⏸️ Pause</button>
@@ -54,19 +54,44 @@
     <div class="panel" id="spawnPanel">
         <h2>Archetypes (spawn)</h2>
         <div class="controls-grid" id="spawnGrid">
-            <button data-spawn="MAT">+ Foraging Mat</button>
-            <button data-spawn="CORD">+ Cord/Creeper</button>
-            <button data-spawn="TOWER">+ Tower/Canopy</button>
-            <button data-spawn="FLOAT">+ Floater/Raft</button>
-            <button data-spawn="EAT">+ Engulfer</button>
-            <button data-spawn="SCOUT">+ Scout/Prospector</button>
+            <button data-spawn="MAT" class="archetype-btn" data-archetype="MAT">+ Foraging Mat</button>
+            <button data-spawn="CORD" class="archetype-btn" data-archetype="CORD">+ Cord/Creeper</button>
+            <button data-spawn="TOWER" class="archetype-btn" data-archetype="TOWER">+ Tower/Canopy</button>
+            <button data-spawn="FLOAT" class="archetype-btn" data-archetype="FLOAT">+ Floater/Raft</button>
+            <button data-spawn="EAT" class="archetype-btn" data-archetype="EAT">+ Engulfer</button>
+            <button data-spawn="SCOUT" class="archetype-btn" data-archetype="SCOUT">+ Scout/Prospector</button>
         </div>
-        <div class="small">Click on the map to place after pressing a + button (click again to unselect).</div>
+        <div class="small">Click on the map to place after pressing a + button (click again to unselect). Hover over buttons to see traits.</div>
+        <div id="archetypeTooltip" class="archetype-tooltip" style="display: none;">
+            <h4 id="tooltipTitle"></h4>
+            <div id="tooltipTraits" class="tooltip-traits"></div>
+        </div>
     </div>
 
     <div class="panel">
-        <h2>Legend</h2>
-        <div class="legend" id="legend"></div>
+        <h2>Live Stats</h2>
+        <div id="liveStats" class="live-stats">
+            <div class="stat-row">
+                <span class="stat-label">Colonies:</span>
+                <span class="stat-value" id="statColonies">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Total Biomass:</span>
+                <span class="stat-value" id="statBiomass">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Tick Rate:</span>
+                <span class="stat-value" id="statTickRate">0/s</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Generation:</span>
+                <span class="stat-value" id="statMaxGen">0</span>
+            </div>
+        </div>
+        <div class="archetype-breakdown" id="archetypeBreakdown">
+            <h3 class="breakdown-title">Population by Type</h3>
+            <div class="breakdown-list" id="breakdownList"></div>
+        </div>
     </div>
 
     <div class="panel">
@@ -86,9 +111,20 @@
 <div id="main">
     <canvas id="canvas"></canvas>
 
-    <div id="overlay" class="collapsed">
-        <h3 style="display:flex;align-items:center;justify-content:space-between;">Inspector <button id="btnOverlayCollapse" class="icon" title="Toggle inspector">⟷</button></h3>
+    <div id="overlay" class="hidden">
+        <h3 style="display:flex;align-items:center;justify-content:space-between;">
+            Inspector 
+            <div style="display:flex;gap:4px;">
+                <button id="btnOverlayCollapse" class="icon" title="Toggle inspector">⟷</button>
+                <button id="btnCloseInspector" class="icon" title="Close inspector">✕</button>
+            </div>
+        </h3>
         <div id="inspector" class="small">Click a colony to inspect.</div>
+        <div id="tilePreview" class="tile-preview" style="display: none;">
+            <h4>Tile Pattern Preview</h4>
+            <canvas id="tileCanvas" width="80" height="80"></canvas>
+        </div>
+        <div id="inspectorActions" class="inspector-actions" style="display: none;"></div>
         <canvas id="miniView" width="240" height="160"></canvas>
         <div id="rtStats" class="rtgrid"></div>
         <div id="stats" style="margin-top:8px"></div>

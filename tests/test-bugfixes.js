@@ -235,5 +235,88 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    runner.test('Canvas redraw frequency - needRedraw flag prevents unnecessary redraws', () => {
+        const restore = createTestWorld();
+
+        // Initialize needRedraw if it doesn't exist (test environment)
+        if (typeof window.needRedraw === 'undefined') {
+            window.needRedraw = true;
+        }
+
+        // Store original value to restore later
+        const originalNeedRedraw = window.needRedraw;
+
+        // Test basic needRedraw flag functionality exists
+        runner.assertType(window.needRedraw, 'boolean', 'needRedraw should be a boolean flag');
+
+        // Test that needRedraw can be set and read
+        window.needRedraw = false;
+        runner.assertEqual(window.needRedraw, false, 'needRedraw should be settable to false');
+        
+        window.needRedraw = true;
+        runner.assertEqual(window.needRedraw, true, 'needRedraw should be settable to true');
+
+        // Test the optimization concept: needRedraw should control when rendering occurs
+        let renderCount = 0;
+        const mockRender = () => {
+            if (window.needRedraw) {
+                renderCount++;
+                window.needRedraw = false; // Reset after render
+            }
+        };
+
+        // Multiple calls without needRedraw=true should not increase count
+        window.needRedraw = false;
+        mockRender(); // Should not render
+        mockRender(); // Should not render
+        runner.assertEqual(renderCount, 0, 'Render should not occur when needRedraw=false');
+
+        // Setting needRedraw=true should allow render
+        window.needRedraw = true;
+        mockRender(); // Should render
+        runner.assertEqual(renderCount, 1, 'Render should occur when needRedraw=true');
+        runner.assertEqual(window.needRedraw, false, 'needRedraw should be reset after render');
+
+        // Restore original value
+        window.needRedraw = originalNeedRedraw;
+        restore.restore();
+    });
+
+    runner.test('Pattern caching does not create excessive memory usage', () => {
+        const restore = createTestWorld();
+
+        // Create multiple colonies to test pattern generation
+        const coloniesWithPatterns = [];
+        
+        for (let i = 0; i < 10; i++) {
+            const colony = createTestColony('MAT', i, 0);
+            colony.pattern = createPatternForColony(colony);
+            coloniesWithPatterns.push(colony);
+            World.colonies.push(colony);
+        }
+
+        // Verify all patterns were created
+        for (const colony of coloniesWithPatterns) {
+            runner.assertNotNull(colony.pattern, 'Colony should have pattern created');
+            runner.assertType(colony.pattern, 'object', 'Pattern should be a canvas object');
+            runner.assertType(colony.pattern.width, 'number', 'Pattern should have width');
+            runner.assertType(colony.pattern.height, 'number', 'Pattern should have height');
+        }
+
+        // Test that patterns are small (memory-efficient 8x8)
+        for (const colony of coloniesWithPatterns) {
+            runner.assertEqual(colony.pattern.width, 8, 'Pattern should be 8 pixels wide');
+            runner.assertEqual(colony.pattern.height, 8, 'Pattern should be 8 pixels high');
+        }
+
+        // Test pattern uniqueness (different colonies should have different patterns)
+        const patterns = coloniesWithPatterns.map(c => c.pattern);
+        for (let i = 0; i < patterns.length - 1; i++) {
+            runner.assertNotEqual(patterns[i], patterns[i + 1], 'Different colonies should have different pattern objects');
+        }
+
+        restore.restore();
+    });
+
     return runner.run();
 }

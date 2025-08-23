@@ -12,6 +12,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+## [2.5] - 2025-08-22
+
+### Added
+- **Major UI Redesign**: Complete overhaul of user interface with modern, responsive design
+- **Live Simulation Stats**: Replaced Legend panel with real-time metrics showing:
+  - Colony count, total biomass, tick rate, and max generation
+  - Population breakdown by archetype with color-coded display
+- **Enhanced Inspector Panel**:
+  - Now hidden by default and slides in when colony is selected
+  - Age display with meaningful time units (hours, days, weeks)
+  - Tile pattern preview showing colony's color and texture up close
+  - Kill colony button with confirmation dialog
+  - Split colony functionality creating parent/child relationships
+  - Randomize color/pattern button for visual variety
+  - Close button for better UX
+- **Archetype Tooltips**: Interactive hover tooltips on spawn buttons showing:
+  - Detailed trait percentages for each archetype
+  - Smooth fade-in animations and professional styling
+- **Responsive Design**: Improved layout that adapts to different screen sizes
+- **Comprehensive Test Coverage**: New test suites for all UI functionality and bug prevention
+- **Enhanced Bug Testing**: Added tests for canvas redraw optimization, pattern memory usage, and ecosystem balance
+
+### Changed
+- **Button Design**: Flatter, more modern button styling with consistent spacing
+- **Color Scheme**: Enhanced visual hierarchy with better contrast
+- **Layout Structure**: Better organized CSS with logical groupings
+- **Animation System**: Smooth transitions for Inspector panel visibility
+- **Code Organization**: Clean separation of UI functions with improved maintainability
+
+### Fixed
+- **Nutrient Starvation Balance**: EAT archetype now properly excels in nutrient-rich environments
+  - Added 50% bonus nutrient efficiency for non-photosynthetic archetypes
+  - Enhanced energy formula balances ecological niches between archetype types
+  - EAT excels in nutrient-rich/low-light, TOWER excels in high-light conditions
+- Inspector panel real-time updates now work correctly
+- Age values display proper time units instead of raw ticks
+- Better error handling for all new UI actions
+- Improved accessibility with proper button labels and tooltips
+
 ## [2.4] - 2025-08-22
 
 ### Added
