@@ -466,5 +466,167 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    runner.test('Adaptive type pressure responds to rapid population changes', () => {
+        const restore = createTestWorld(10, 10);
+
+        // Initialize with a small balanced population
+        World.colonies = [];
+        World.tiles.fill(-1);
+        
+        // Create a few colonies of each type
+        const matColony = createTestColony('MAT', 1, 2, 2);
+        const towerColony = createTestColony('TOWER', 2, 6, 6);
+        
+        World.colonies.push(matColony, towerColony);
+        World.tiles[idx(2, 2)] = matColony.id;
+        World.tiles[idx(6, 6)] = towerColony.id;
+        
+        // Force initial pressure calculation
+        World.tick = 0;
+        updateTypePressure(true);
+        
+        const initialMatPressure = World.typePressure.MAT;
+        const initialTowerPressure = World.typePressure.TOWER;
+        
+        runner.assertBetween(initialMatPressure, 0.55, 1.0, 'Initial MAT pressure should be in valid range');
+        runner.assertBetween(initialTowerPressure, 0.55, 1.0, 'Initial TOWER pressure should be in valid range');
+        
+        // Simulate rapid population growth for MAT (add many tiles)
+        for (let i = 0; i < 30; i++) {
+            World.tiles[10 + i] = matColony.id; // Fill many tiles with MAT
+        }
+        
+        // Advance time by just a few ticks and check if pressure updates
+        World.tick = 5;
+        updateTypePressure(); // Should detect significant change and update
+        
+        const newMatPressure = World.typePressure.MAT;
+        const newTowerPressure = World.typePressure.TOWER;
+        
+        // MAT pressure should decrease due to increased population
+        runner.assertLessThan(newMatPressure, initialMatPressure, 'MAT pressure should decrease after rapid growth');
+        // TOWER pressure should increase (less competition)
+        runner.assertGreaterThan(newTowerPressure, initialTowerPressure, 'TOWER pressure should increase when MAT dominates');
+        
+        restore.restore();
+    });
+
+    runner.test('Type pressure skips updates when population is stable', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Set up stable population
+        const colony = createTestColony('SCOUT', 1, 2, 2);
+        World.colonies = [colony];
+        World.tiles.fill(-1);
+        World.tiles[idx(2, 2)] = colony.id;
+        
+        // Force initial update
+        World.tick = 0;
+        updateTypePressure(true);
+        
+        const initialPressure = World.typePressure.SCOUT;
+        const initialUpdateTime = World.lastPressureUpdate;
+        
+        // Advance time by small amount with no population change
+        World.tick = 7;
+        updateTypePressure(); // Should skip update (no significant change, <30 ticks)
+        
+        // Pressure should be unchanged and update time should be unchanged
+        runner.assertEqual(World.typePressure.SCOUT, initialPressure, 'Pressure should not change with stable population');
+        runner.assertEqual(World.lastPressureUpdate, initialUpdateTime, 'Update time should not change when skipping');
+        
+        // Advance time to force update threshold
+        World.tick = 35;
+        updateTypePressure(); // Should update due to time threshold
+        
+        runner.assertGreaterThan(World.lastPressureUpdate, initialUpdateTime, 'Should update after time threshold');
+        
+        restore.restore();
+    });
+
+    runner.test('Type pressure detects significant population changes', () => {
+        const restore = createTestWorld(10, 10);
+
+        // Start with balanced population
+        World.colonies = [];
+        World.tiles.fill(-1);
+        
+        const matColony = createTestColony('MAT', 1, 1, 1);
+        const eatColony = createTestColony('EAT', 2, 5, 5);
+        
+        World.colonies.push(matColony, eatColony);
+        
+        // Set equal populations (5 tiles each)
+        for (let i = 0; i < 5; i++) {
+            World.tiles[i] = matColony.id;
+            World.tiles[i + 10] = eatColony.id;
+        }
+        
+        World.tick = 0;
+        updateTypePressure(true);
+        
+        const initialUpdateTime = World.lastPressureUpdate;
+        
+        // Add significant MAT population (crosses 15% threshold)
+        for (let i = 20; i < 35; i++) { // Add 15 more MAT tiles
+            World.tiles[i] = matColony.id;
+        }
+        
+        World.tick = 3; // Very short time
+        updateTypePressure(); // Should detect significant change
+        
+        runner.assertGreaterThan(World.lastPressureUpdate, initialUpdateTime, 'Should update immediately on significant change');
+        
+        // Verify pressure actually changed
+        runner.assertBetween(World.typePressure.MAT, 0.55, 0.8, 'MAT pressure should be reduced due to dominance');
+        
+        restore.restore();
+    });
+
+    runner.test('Type pressure maintains ecosystem balance during rapid growth', () => {
+        const restore = createTestWorld(8, 8);
+
+        // Simulate rapid growth scenario
+        World.colonies = [];
+        World.tiles.fill(-1);
+        
+        const fastGrower = createTestColony('SCOUT', 1, 3, 3);
+        const slowGrower = createTestColony('TOWER', 2, 5, 5);
+        
+        World.colonies.push(fastGrower, slowGrower);
+        World.tiles[idx(3, 3)] = fastGrower.id;
+        World.tiles[idx(5, 5)] = slowGrower.id;
+        
+        // Initial state
+        World.tick = 0;
+        updateTypePressure(true);
+        
+        // Simulate several rounds of growth with pressure updates
+        for (let round = 0; round < 10; round++) {
+            // Fast grower expands
+            for (let i = 0; i < 3; i++) {
+                const tileIdx = 10 + round * 3 + i;
+                if (tileIdx < World.tiles.length) {
+                    World.tiles[tileIdx] = fastGrower.id;
+                }
+            }
+            
+            World.tick = round * 5 + 5;
+            updateTypePressure(); // Should respond quickly to changes
+        }
+        
+        // Verify ecosystem balance is maintained
+        const scoutPressure = World.typePressure.SCOUT;
+        const towerPressure = World.typePressure.TOWER;
+        
+        runner.assertBetween(scoutPressure, 0.55, 1.0, 'SCOUT pressure should be in valid range');
+        runner.assertBetween(towerPressure, 0.55, 1.0, 'TOWER pressure should be in valid range');
+        
+        // The fast-growing type should have lower pressure due to dominance
+        runner.assertLessThan(scoutPressure, towerPressure, 'Dominant type should have lower spawning pressure');
+        
+        restore.restore();
+    });
+
     return runner.run();
 }

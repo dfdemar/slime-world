@@ -8,15 +8,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Potential Issues
 
-### 1. Type Pressure Calculation Timing
-**Location:** `updateTypePressure()` function  
-**Issue:** Called every 30 ticks, may not respond quickly enough to rapid population changes  
-**Details:** Could allow temporary monocultures before pressure adjustment kicks in  
-**Impact:** Temporary ecosystem imbalance  
-**Priority:** Low  
-**Test Coverage:** ✅ Tests added to verify type pressure edge cases
-
-### 2. Random Number Generator State
+### 1. Random Number Generator State
 **Location:** Global `World.rng` usage  
 **Issue:** Single global RNG state shared across all systems  
 **Details:** Could cause reproduction in deterministic scenarios if save/load affects RNG state  
@@ -44,7 +36,20 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Fixed Issues
 
-### 1. Boundary Wrapping Inconsistency ✅ FIXED
+### 1. Type Pressure Calculation Timing ✅ FIXED
+**Location:** `updateTypePressure()` function (ecosystem.js:11, integration.js:322)  
+**Issue:** Called every 30 ticks, allowing rapid population changes to create temporary monocultures before pressure adjustment  
+**Details:** Fixed-interval updates were too slow to respond to rapid population explosions, allowing single archetypes to dominate temporarily and disrupt ecosystem balance  
+**Fix Applied:** Implemented adaptive pressure system with intelligent update timing:
+- Checks population every 5 ticks but only calculates pressure when needed
+- Detects significant population changes (>15% share difference) and updates immediately
+- Falls back to 30-tick maximum interval if no changes detected
+- Tracks population history to compare changes efficiently
+- Added force parameter for initialization
+**Impact:** Prevents temporary monocultures by responding quickly to population explosions while maintaining performance during stable periods  
+**Status:** Fixed in v2.6 - comprehensive tests verify responsive pressure updates and ecosystem balance maintenance
+
+### 2. Boundary Wrapping Inconsistency ✅ FIXED
 **Location:** Various functions using modulo operations (world.js, ecosystem.js, colonies.js, integration.js)  
 **Issue:** Some boundary calculations used wrapping while others used clamping, creating inconsistent toroidal topology  
 **Details:** Chemical diffusion (slime trails, nutrients) wrapped around edges while colony suitability and expansion stopped at boundaries, preventing colonies from following their chemical signals across world edges  

@@ -318,7 +318,8 @@ function stepUnifiedEcosystem() {
         starvationSweep();
         nutrientDynamics();
 
-        if (World.tick % 30 === 0) updateTypePressure();
+        // Check for adaptive type pressure updates every 5 ticks
+        if (World.tick % 5 === 0) updateTypePressure();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
             // Clean up patterns before removing colonies

@@ -85,6 +85,6 @@ function setupWorld(seed, sizeStr) {
     Slime.trailNext = new Float32Array(W * H);
     buildEnvironment();
     seedInitialColonies();
-    updateTypePressure();
+    updateTypePressure(true); // Force initial calculation
     refreshLiveStats();
 }

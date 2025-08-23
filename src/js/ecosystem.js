@@ -3,7 +3,12 @@
 // Energy calculation constants
 window.NON_PHOTOSYNTHETIC_BONUS = 0.5; // Bonus nutrient efficiency for non-photosynthetic archetypes
 const NON_PHOTOSYNTHETIC_BONUS = window.NON_PHOTOSYNTHETIC_BONUS;
-function updateTypePressure() {
+
+// Track population changes for adaptive pressure updates
+World.lastTypeCounts = null;
+World.lastPressureUpdate = 0;
+
+function updateTypePressure(force = false) {
     const counts = {MAT: 0, CORD: 0, TOWER: 0, FLOAT: 0, EAT: 0, SCOUT: 0};
     const idToType = new Map();
     for (const c of World.colonies) {
@@ -19,6 +24,32 @@ function updateTypePressure() {
             counts[t] = (counts[t] || 0) + 1;
         }
     }
+    
+    // Check if significant population changes occurred
+    let significantChange = force;
+    if (World.lastTypeCounts && !force) {
+        const totalNow = Math.max(1, filled);
+        const totalLast = Math.max(1, Object.values(World.lastTypeCounts).reduce((a, b) => a + b, 0));
+        
+        for (const t of Object.keys(Archetypes)) {
+            const shareNow = (counts[t] || 0) / totalNow;
+            const shareLast = (World.lastTypeCounts[t] || 0) / totalLast;
+            const changeMagnitude = Math.abs(shareNow - shareLast);
+            
+            // Trigger update if any type changes by more than 15% of population share
+            if (changeMagnitude > 0.15) {
+                significantChange = true;
+                break;
+            }
+        }
+    }
+    
+    // Only update if significant change detected or enough time passed
+    const timeSinceUpdate = World.tick - World.lastPressureUpdate;
+    if (!significantChange && timeSinceUpdate < 30) {
+        return; // Skip update
+    }
+    
     const total = Math.max(1, filled);
     World.typePressure = {};
     for (const t of Object.keys(Archetypes)) {
@@ -26,6 +57,10 @@ function updateTypePressure() {
         const pressure = clamp(1 - 0.7 * share, 0.55, 1.0);
         World.typePressure[t] = pressure;
     }
+    
+    // Store current counts and update time for next comparison
+    World.lastTypeCounts = {...counts};
+    World.lastPressureUpdate = World.tick;
 }
 
 function starvationSweep() {
@@ -229,7 +264,8 @@ function stepEcosystem() {
         Slime.diffuseEvaporate();
         starvationSweep();
         nutrientDynamics();
-        if (World.tick % 30 === 0) updateTypePressure();
+        // Check for adaptive type pressure updates every 5 ticks
+        if (World.tick % 5 === 0) updateTypePressure();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
             // Clean up patterns before removing colonies
