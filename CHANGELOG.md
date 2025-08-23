@@ -31,7 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Detailed trait percentages for each archetype
   - Smooth fade-in animations and professional styling
 - **Responsive Design**: Improved layout that adapts to different screen sizes
-- **Comprehensive Test Coverage**: New test suites for all UI functionality
+- **Comprehensive Test Coverage**: New test suites for all UI functionality and bug prevention
+- **Enhanced Bug Testing**: Added tests for canvas redraw optimization, pattern memory usage, and ecosystem balance
 
 ### Changed
 - **Button Design**: Flatter, more modern button styling with consistent spacing
@@ -41,6 +42,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Code Organization**: Clean separation of UI functions with improved maintainability
 
 ### Fixed
+- **Nutrient Starvation Balance**: EAT archetype now properly excels in nutrient-rich environments
+  - Added 50% bonus nutrient efficiency for non-photosynthetic archetypes
+  - Enhanced energy formula balances ecological niches between archetype types
+  - EAT excels in nutrient-rich/low-light, TOWER excels in high-light conditions
 - Inspector panel real-time updates now work correctly
 - Age values display proper time units instead of raw ticks
 - Better error handling for all new UI actions

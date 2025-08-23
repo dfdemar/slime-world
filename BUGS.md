@@ -16,26 +16,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Priority:** Low  
 **Test Coverage:** ✅ Test added to verify pattern cleanup behavior
 
-### 2. Nutrient Starvation Balance ✅ FIXED
-**Location:** `starvationSweep()` function (ecosystem.js:42)  
-**Issue:** EAT archetype lacked advantage in nutrient-rich environments despite no photosynthesis  
-**Details:** Original energy formula `0.7*nutrient + 0.3*photosym*light` required 0.5 nutrients for ALL archetypes to survive without light. EAT (photosym=0) had no compensation mechanism for its photosynthesis limitation.  
-**Fix Applied:** Enhanced energy formula with non-photosynthetic bonus:
-```javascript
-const NON_PHOTOSYNTHETIC_BONUS = 0.5; // Configurable constant
-const nonPhotoBonus = ps < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - ps * 10) : 0;
-const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
-```
-**Results:**
-- EAT archetype now receives 50% bonus nutrient efficiency  
-- Balance maintained: bonus decreases as photosynthesis increases
-- EAT can now survive moderate conditions (0.3 nutrient, 0.3 light)
-- Non-photosynthetic types are competitive in nutrient-rich environments
-**Impact:** EAT archetype now properly excels in nutrient-rich, low-light environments  
-**Priority:** ✅ RESOLVED  
-**Test Coverage:** ✅ Updated tests verify fix and prevent regression
-
-### 3. Boundary Wrapping Inconsistency
+### 2. Boundary Wrapping Inconsistency
 **Location:** Various functions using modulo operations  
 **Issue:** Some boundary calculations use wrapping while others don't  
 **Details:** May cause inconsistent behavior at world edges  
@@ -74,7 +55,8 @@ const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
 **Issue:** Full canvas redraw on every frame  
 **Details:** Could implement dirty region tracking  
 **Impact:** CPU usage on large worlds  
-**Priority:** Low
+**Priority:** Low  
+**Test Coverage:** ✅ Tests added to verify needRedraw optimization flag
 
 ## Fixed Issues
 
@@ -86,5 +68,24 @@ const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
 **Fix:** Removed the incorrect line that was commented as a bug, kept the correct implementation
 **Status:** Fixed in refactoring - comprehensive tests added to prevent regression
 
+### 2. Nutrient Starvation Balance ✅ FIXED  
+**Location:** `starvationSweep()` function (ecosystem.js:43)  
+**Issue:** EAT archetype lacked advantage in nutrient-rich environments despite no photosynthesis  
+**Details:** Original energy formula `0.7*nutrient + 0.3*photosym*light` required 0.5 nutrients for ALL archetypes to survive without light. EAT (photosym=0) had no compensation mechanism for its photosynthesis limitation.  
+**Fix Applied:** Enhanced energy formula with non-photosynthetic bonus:
+```javascript
+const NON_PHOTOSYNTHETIC_BONUS = 0.5; // Configurable constant
+const nonPhotoBonus = ps < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - ps * 10) : 0;
+const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
+```
+**Results:**
+- EAT archetype now receives 50% bonus nutrient efficiency  
+- Balance maintained: bonus decreases as photosynthesis increases
+- EAT can survive moderate conditions (0.3 nutrient, 0.3 light)
+- Non-photosynthetic types are competitive in nutrient-rich environments
+- Proper ecological niches: EAT excels in nutrient-rich/low-light, TOWER excels in high-light
+**Impact:** EAT archetype now properly excels in nutrient-rich, low-light environments  
+**Status:** Fixed in v2.5 - comprehensive tests verify fix and prevent regression
+
 ---
-*Last updated: 2025-08-22*
+*Last updated: 2025-08-23*
