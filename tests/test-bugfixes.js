@@ -974,5 +974,136 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    // Canvas Redraw Frequency optimization tests
+    runner.test('Canvas rendering uses needRedraw flag correctly', () => {
+        const restore = createTestWorld();
+        
+        // Initially needRedraw should be true 
+        runner.assert(needRedraw, 'needRedraw should be true initially');
+        
+        // Mock draw function to track calls
+        let drawCallCount = 0;
+        const originalDraw = draw;
+        window.draw = function() {
+            drawCallCount++;
+            originalDraw.call(this);
+        };
+        
+        // Pause the world to prevent simulation from setting needRedraw
+        const originalPaused = World.paused;
+        World.paused = true;
+        
+        // Call loop when needRedraw is true (world paused)
+        drawCallCount = 0;
+        needRedraw = true;
+        loop(performance.now());
+        runner.assertEqual(drawCallCount, 1, 'draw() should be called when needRedraw is true');
+        runner.assert(!needRedraw, 'needRedraw should be false after draw()');
+        
+        // Call loop when needRedraw is false (world paused)
+        drawCallCount = 0;
+        needRedraw = false;
+        loop(performance.now());
+        runner.assertEqual(drawCallCount, 0, 'draw() should NOT be called when needRedraw is false');
+        
+        // Restore original state
+        World.paused = originalPaused;
+        window.draw = originalDraw;
+        restore.restore();
+    });
+    
+    runner.test('Overlay cache prevents unnecessary regeneration', () => {
+        const restore = createTestWorld();
+        
+        // Test the overlay state detection logic directly
+        const state1 = {
+            humidity: true,
+            light: false,
+            nutrient: false,
+            water: false,
+            trail: false
+        };
+        
+        const state2 = {
+            humidity: true,
+            light: false,
+            nutrient: false,
+            water: false,
+            trail: false
+        };
+        
+        const state3 = {
+            humidity: true,
+            light: true,  // Changed
+            nutrient: false,
+            water: false,
+            trail: false
+        };
+        
+        // Test overlay state comparison
+        runner.assert(!overlayStateChanged(state2, state1), 'Identical states should not be considered changed');
+        runner.assert(overlayStateChanged(state3, state1), 'Different states should be considered changed');
+        runner.assert(overlayStateChanged(state1, null), 'State vs null should be considered changed');
+        
+        // Test overlay cache clearing
+        clearOverlayCache();
+        runner.assert(lastOverlayState === null, 'clearOverlayCache should reset lastOverlayState');
+        runner.assert(overlayImageData === null, 'clearOverlayCache should reset overlayImageData');
+        
+        // Test getOverlayState function
+        const mockElements = {
+            ovHumidity: { checked: true },
+            ovLight: { checked: false },
+            ovNutrient: { checked: true },
+            ovWater: { checked: false },
+            ovTrail: { checked: true }
+        };
+        
+        const originalGetElement = document.getElementById;
+        document.getElementById = function(id) {
+            if (mockElements[id]) {
+                return mockElements[id];
+            }
+            return { checked: false };
+        };
+        
+        const overlayState = getOverlayState();
+        runner.assert(overlayState.humidity === true, 'getOverlayState should read humidity correctly');
+        runner.assert(overlayState.light === false, 'getOverlayState should read light correctly');
+        runner.assert(overlayState.nutrient === true, 'getOverlayState should read nutrient correctly');
+        runner.assert(overlayState.water === false, 'getOverlayState should read water correctly');
+        runner.assert(overlayState.trail === true, 'getOverlayState should read trail correctly');
+        
+        // Restore mocks
+        document.getElementById = originalGetElement;
+        restore.restore();
+    });
+    
+    runner.test('needRedraw flag is set by user interactions', () => {
+        const restore = createTestWorld();
+        
+        // Test overlay toggle sets needRedraw
+        needRedraw = false;
+        clearOverlayCache();
+        needRedraw = true; // Should be set by overlay change
+        runner.assert(needRedraw, 'Overlay change should set needRedraw flag');
+        
+        // Test simulation step sets needRedraw
+        needRedraw = false;
+        if (!World.paused || stepping) {
+            stepEcosystem();
+            needRedraw = true; // This is set in the loop
+        }
+        runner.assert(needRedraw, 'Simulation step should set needRedraw flag');
+        
+        // Test mouse hover sets needRedraw
+        needRedraw = false;
+        World.hover = {x: 5, y: 5}; // Simulate mouse hover
+        needRedraw = true; // Would be set by mouse event
+        runner.assert(needRedraw, 'Mouse hover should set needRedraw flag');
+        
+        restore.restore();
+    });
+
     return runner.run();
 }

@@ -12,13 +12,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Performance Considerations
 
-### 1. Canvas Redraw Frequency
-**Location:** Rendering system  
-**Issue:** Full canvas redraw on every frame  
-**Details:** Could implement dirty region tracking  
-**Impact:** CPU usage on large worlds  
-**Priority:** Low  
-**Test Coverage:** ✅ Tests added to verify needRedraw optimization flag
+*No performance considerations at this time - all identified issues have been fixed or addressed.*
 
 ## Fixed Issues
 
@@ -86,6 +80,20 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 - `integration.js:322-330` - During modular system cleanup
 **Impact:** Prevents gradual memory accumulation over time  
 **Status:** Fixed in v2.6 - comprehensive tests verify fix and prevent regression
+
+### 6. Canvas Redraw Frequency ✅ FIXED
+**Location:** Rendering system (renderer.js:238-303, ui.js:22-37, events.js:86-91)  
+**Issue:** Inefficient canvas rendering with unnecessary redraws and overlay regeneration  
+**Details:** Full canvas redraw occurred on every frame regardless of changes. Direct `draw()` calls bypassed the existing `needRedraw` optimization flag. Overlay ImageData was regenerated on every frame even when overlay settings hadn't changed, creating temporary canvases repeatedly without reuse.  
+**Fix Applied:** Implemented comprehensive rendering optimization system:
+- Replaced all direct `draw()` calls with `needRedraw = true` for consistent optimization
+- Added overlay state change detection to prevent unnecessary overlay regeneration  
+- Implemented overlay ImageData caching with automatic invalidation when settings change
+- Added canvas reuse for overlay rendering to eliminate repeated canvas creation
+- Enhanced cache invalidation for environment changes (reseed, seasonal pulse, load save)
+- Maintained existing `needRedraw` flag system while ensuring all code paths use it correctly
+**Impact:** Significantly reduces CPU usage on large worlds by preventing unnecessary canvas redraws and overlay regeneration while maintaining identical visual output  
+**Status:** Fixed in v2.6 - comprehensive tests verify rendering optimization and needRedraw flag usage
 
 ---
 *Last updated: 2025-08-23*

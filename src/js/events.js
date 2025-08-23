@@ -85,7 +85,8 @@ function initializeCanvasEvents() {
 function initializeControlEvents() {
     ['ovHumidity', 'ovLight', 'ovNutrient', 'ovWater', 'ovTrail'].forEach(id => {
         document.getElementById(id).addEventListener('change', () => {
-            needRedraw = true
+            clearOverlayCache(); // Clear overlay cache when overlay settings change
+            needRedraw = true;
         });
     });
 
@@ -114,8 +115,9 @@ function initializeControlEvents() {
     document.getElementById('btnReseed').addEventListener('click', () => {
         buildEnvironment();
         Slime.clear();
+        clearOverlayCache(); // Clear overlay cache since environment changed
         notify('Environment reseeded', 'warn', 900);
-        draw();
+        needRedraw = true;
     });
     document.getElementById('btnShake').addEventListener('click', () => {
         for (let i = 0; i < World.env.humidity.length; i++) {
@@ -123,8 +125,9 @@ function initializeControlEvents() {
             World.env.light[i] = clamp(World.env.light[i] + randRange(World.rng, -0.15, 0.2), 0, 1);
             World.env.nutrient[i] = clamp(World.env.nutrient[i] + randRange(World.rng, -0.1, 0.3), 0, 1);
         }
+        clearOverlayCache(); // Clear overlay cache since environment changed
         notify('Seasonal pulse applied', 'warn', 900);
-        draw();
+        needRedraw = true;
     });
     document.getElementById('btnOverlayCollapse').addEventListener('click', () => {
         const el = document.getElementById('overlay');

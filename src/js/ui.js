@@ -47,7 +47,8 @@ function reset() {
     World.paused = false;
     document.getElementById('btnPause').textContent = '⏸️ Pause';
     resize();
-    draw();
+    clearOverlayCache(); // Clear overlay cache for new world
+    needRedraw = true;
 }
 
 function colonyAtCanvas(px, py) {
@@ -505,7 +506,8 @@ function loadJSON(e) {
                 World.setRNGState(data.rngState);
             }
             refreshLiveStats();
-            draw();
+            clearOverlayCache(); // Clear overlay cache since world state changed
+            needRedraw = true;
             notify('Loaded save', 'warn', 1000);
         } catch (err) {
             console.error(err);
