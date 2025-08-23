@@ -316,6 +316,9 @@ function killColony(colonyId) {
         }
     }
 
+    // Clean up pattern before removal to prevent memory leaks
+    cleanupColonyPattern(colony);
+    
     // Remove colony from world
     World.colonies = World.colonies.filter(c => c.id !== colonyId);
     

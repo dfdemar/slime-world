@@ -89,6 +89,18 @@ function createPatternForColony(col) {
     return off;
 }
 
+function cleanupColonyPattern(colony) {
+    if (colony.pattern) {
+        // Clean up canvas pattern to prevent memory leaks
+        const pattern = colony.pattern;
+        if (pattern.getContext) {
+            const ctx = pattern.getContext('2d');
+            ctx.clearRect(0, 0, pattern.width, pattern.height);
+        }
+        colony.pattern = null;
+    }
+}
+
 function draw() {
     const {W, H} = World;
     const cell = viewScale;

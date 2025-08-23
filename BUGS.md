@@ -8,15 +8,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Potential Issues
 
-### 1. Memory Leak in Pattern Caching
-**Location:** Pattern generation system  
-**Issue:** No explicit cleanup mechanism for colony patterns when colonies are removed  
-**Details:** While patterns are small (8x8), long-running simulations with many colony births/deaths could accumulate memory  
-**Impact:** Gradual memory increase over time  
-**Priority:** Low  
-**Test Coverage:** ✅ Test added to verify pattern cleanup behavior
-
-### 2. Boundary Wrapping Inconsistency
+### 1. Boundary Wrapping Inconsistency
 **Location:** Various functions using modulo operations  
 **Issue:** Some boundary calculations use wrapping while others don't  
 **Details:** May cause inconsistent behavior at world edges  
@@ -24,7 +16,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Priority:** Low  
 **Test Coverage:** ✅ Tests added to verify boundary wrapping consistency
 
-### 4. Type Pressure Calculation Timing
+### 3. Type Pressure Calculation Timing
 **Location:** `updateTypePressure()` function  
 **Issue:** Called every 30 ticks, may not respond quickly enough to rapid population changes  
 **Details:** Could allow temporary monocultures before pressure adjustment kicks in  
@@ -32,7 +24,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Priority:** Low  
 **Test Coverage:** ✅ Tests added to verify type pressure edge cases
 
-### 5. Random Number Generator State
+### 4. Random Number Generator State
 **Location:** Global `World.rng` usage  
 **Issue:** Single global RNG state shared across all systems  
 **Details:** Could cause reproduction in deterministic scenarios if save/load affects RNG state  
@@ -60,32 +52,16 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Fixed Issues
 
-### 1. Mini-map Division Error ✅ FIXED
-**Location:** `src/js/ui.js` (formerly `index.html:627`)  
-**Issue:** Wrong divisor used in mini-map rendering calculation  
-**Details:** `y=Math.floor(i/World.H)` should be `y=Math.floor(i/World.W)`  
-**Impact:** Mini-map colony visualization was incorrectly positioned  
-**Fix:** Removed the incorrect line that was commented as a bug, kept the correct implementation
-**Status:** Fixed in refactoring - comprehensive tests added to prevent regression
-
-### 2. Nutrient Starvation Balance ✅ FIXED  
-**Location:** `starvationSweep()` function (ecosystem.js:43)  
-**Issue:** EAT archetype lacked advantage in nutrient-rich environments despite no photosynthesis  
-**Details:** Original energy formula `0.7*nutrient + 0.3*photosym*light` required 0.5 nutrients for ALL archetypes to survive without light. EAT (photosym=0) had no compensation mechanism for its photosynthesis limitation.  
-**Fix Applied:** Enhanced energy formula with non-photosynthetic bonus:
-```javascript
-const NON_PHOTOSYNTHETIC_BONUS = 0.5; // Configurable constant
-const nonPhotoBonus = ps < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - ps * 10) : 0;
-const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
-```
-**Results:**
-- EAT archetype now receives 50% bonus nutrient efficiency  
-- Balance maintained: bonus decreases as photosynthesis increases
-- EAT can survive moderate conditions (0.3 nutrient, 0.3 light)
-- Non-photosynthetic types are competitive in nutrient-rich environments
-- Proper ecological niches: EAT excels in nutrient-rich/low-light, TOWER excels in high-light
-**Impact:** EAT archetype now properly excels in nutrient-rich, low-light environments  
-**Status:** Fixed in v2.5 - comprehensive tests verify fix and prevent regression
+### 1. Memory Leak in Pattern Caching ✅ FIXED
+**Location:** Pattern generation system (renderer.js:92)  
+**Issue:** No explicit cleanup mechanism for colony patterns when colonies are removed  
+**Details:** While patterns are small (8x8), long-running simulations with many colony births/deaths could accumulate memory  
+**Fix Applied:** Added `cleanupColonyPattern()` function that properly cleans up canvas patterns and sets pattern property to null. Integrated cleanup calls in all colony removal locations:
+- `ecosystem.js:244-250` - During periodic cleanup sweep
+- `ui.js:319-320` - During manual colony removal
+- `integration.js:322-330` - During modular system cleanup
+**Impact:** Prevents gradual memory accumulation over time  
+**Status:** Fixed in v2.6 - comprehensive tests verify fix and prevent regression
 
 ---
 *Last updated: 2025-08-23*

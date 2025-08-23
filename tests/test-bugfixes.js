@@ -318,5 +318,54 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    runner.test('Pattern cleanup prevents memory leaks', () => {
+        const restore = createTestWorld();
+
+        // Create colony with pattern
+        const colony = createTestColony('MAT', 1, 0);
+        colony.pattern = createPatternForColony(colony);
+        
+        // Verify pattern exists
+        runner.assertNotNull(colony.pattern, 'Colony should have pattern created');
+        runner.assertType(colony.pattern, 'object', 'Pattern should be a canvas object');
+        
+        // Test cleanup function
+        cleanupColonyPattern(colony);
+        
+        // Verify pattern was cleaned up
+        runner.assertEqual(colony.pattern, null, 'Pattern should be null after cleanup');
+        
+        // Test cleanup on colony without pattern (should not error)
+        const colonyWithoutPattern = createTestColony('TOWER', 2, 0);
+        runner.assertEqual(colonyWithoutPattern.pattern, null, 'New colony should not have pattern initially');
+        cleanupColonyPattern(colonyWithoutPattern); // Should not throw
+        
+        // Test cleanup during colony removal simulation
+        const coloniesForRemoval = [];
+        for (let i = 0; i < 5; i++) {
+            const col = createTestColony('EAT', i + 10, 0);
+            col.pattern = createPatternForColony(col);
+            coloniesForRemoval.push(col);
+            World.colonies.push(col);
+        }
+        
+        // Verify all have patterns
+        for (const col of coloniesForRemoval) {
+            runner.assertNotNull(col.pattern, 'Colony should have pattern before removal');
+        }
+        
+        // Simulate cleanup before removal (like in ecosystem.js)
+        for (const col of coloniesForRemoval) {
+            cleanupColonyPattern(col);
+        }
+        
+        // Verify all patterns cleaned up
+        for (const col of coloniesForRemoval) {
+            runner.assertEqual(col.pattern, null, 'Pattern should be cleaned up before colony removal');
+        }
+        
+        restore.restore();
+    });
+
     return runner.run();
 }

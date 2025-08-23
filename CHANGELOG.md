@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+## [2.6] - 2025-08-23
+
+### Fixed
+- **Memory Leak in Pattern Caching**: Fixed potential memory leak where colony canvas patterns (8x8 textures) were not properly cleaned up when colonies died or were removed. Added `cleanupColonyPattern()` function that clears canvas contents and sets pattern reference to null. Integrated cleanup in all colony removal points: periodic ecosystem cleanup, manual colony removal, and modular system cleanup. Added comprehensive tests to verify fix and prevent regression.
+
 ## [2.5] - 2025-08-22
 
 ### Added

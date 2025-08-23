@@ -241,6 +241,12 @@ function stepEcosystem() {
         if (World.tick % 30 === 0) updateTypePressure();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
+            // Clean up patterns before removing colonies
+            for (const colony of World.colonies) {
+                if (!alive.has(colony.id)) {
+                    cleanupColonyPattern(colony);
+                }
+            }
             World.colonies = World.colonies.filter(c => alive.has(c.id));
         }
     }
