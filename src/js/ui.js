@@ -469,7 +469,9 @@ function saveJSON() {
         biomass: Array.from(World.biomass),
         colonies: World.colonies,
         nextId: World.nextId,
-        tick: World.tick
+        tick: World.tick,
+        // Include RNG state for determinism
+        rngState: World.getRNGState()
     };
     const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
@@ -498,6 +500,10 @@ function loadJSON(e) {
             World.colonies = data.colonies.map(c => ({...c, pattern: createPatternForColony(c)}));
             World.nextId = data.nextId;
             World.tick = data.tick;
+            // Restore RNG state for determinism
+            if (data.rngState) {
+                World.setRNGState(data.rngState);
+            }
             refreshLiveStats();
             draw();
             notify('Loaded save', 'warn', 1000);

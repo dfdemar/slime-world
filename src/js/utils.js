@@ -12,19 +12,28 @@ function xmur3(str) {
 }
 
 function sfc32(a, b, c, d) {
-    return function () {
-        a |= 0;
-        b |= 0;
-        c |= 0;
-        d |= 0;
-        var t = (a + b | 0) + d | 0;
-        d = d + 1 | 0;
-        a = b ^ b >>> 9;
-        b = c + (c << 3) | 0;
-        c = (c << 21 | c >>> 11);
-        c = c + t | 0;
-        return (t >>> 0) / 4294967296
-    }
+    const state = {a: a|0, b: b|0, c: c|0, d: d|0};
+    
+    const rng = function () {
+        var t = (state.a + state.b | 0) + state.d | 0;
+        state.d = state.d + 1 | 0;
+        state.a = state.b ^ state.b >>> 9;
+        state.b = state.c + (state.c << 3) | 0;
+        state.c = (state.c << 21 | state.c >>> 11);
+        state.c = state.c + t | 0;
+        return (t >>> 0) / 4294967296;
+    };
+    
+    // Expose state for serialization
+    rng.getState = () => ({...state});
+    rng.setState = (newState) => {
+        state.a = newState.a|0;
+        state.b = newState.b|0;
+        state.c = newState.c|0;
+        state.d = newState.d|0;
+    };
+    
+    return rng;
 }
 
 function clamp(v, a, b) {

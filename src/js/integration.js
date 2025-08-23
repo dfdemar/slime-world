@@ -291,7 +291,7 @@ function stepUnifiedEcosystem() {
                 const pressure = World.typePressure[c.type] ?? 1;
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
 
-                if (c.biomass > 0.8 && c.lastFit > 0.55 && Math.random() < spawnP) {
+                if (c.biomass > 0.8 && c.lastFit > 0.55 && World.rng() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
                     const bx = wrapX(Math.round(c.x + dir[0] * 2));
                     const by = wrapY(Math.round(c.y + dir[1] * 2));

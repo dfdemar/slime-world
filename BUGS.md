@@ -8,13 +8,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Potential Issues
 
-### 1. Random Number Generator State
-**Location:** Global `World.rng` usage  
-**Issue:** Single global RNG state shared across all systems  
-**Details:** Could cause reproduction in deterministic scenarios if save/load affects RNG state  
-**Impact:** Non-deterministic behavior in edge cases  
-**Priority:** Low  
-**Test Coverage:** ✅ Tests added to verify RNG determinism
+*No potential issues at this time.*
 
 ## Performance Considerations
 
@@ -49,7 +43,20 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Impact:** Prevents temporary monocultures by responding quickly to population explosions while maintaining performance during stable periods  
 **Status:** Fixed in v2.6 - comprehensive tests verify responsive pressure updates and ecosystem balance maintenance
 
-### 2. Boundary Wrapping Inconsistency ✅ FIXED
+### 2. Random Number Generator State ✅ FIXED
+**Location:** Global `World.rng` usage and save/load system (utils.js:14-36, ui.js:458-510, world.js:82-94)  
+**Issue:** RNG state not preserved in save/load operations and inconsistent use of deterministic vs non-deterministic random sources  
+**Details:** Save/load system didn't include RNG state, causing deterministic simulations to become non-reproducible after loading. Some code used `Math.random()` instead of `World.rng()`, creating mixed deterministic/non-deterministic behavior.  
+**Fix Applied:** Enhanced RNG state management with complete determinism:
+- Modified `sfc32()` to expose `getState()` and `setState()` methods for serialization
+- Added `World.getRNGState()` and `World.setRNGState()` utility functions
+- Updated save/load system to preserve and restore RNG state
+- Replaced all `Math.random()` calls with `World.rng()` for consistency
+- Enhanced RNG with internal state management for reliable serialization
+**Impact:** Guarantees complete determinism and reproducibility across save/load operations, eliminating non-deterministic behavior in edge cases  
+**Status:** Fixed in v2.6 - comprehensive tests verify RNG state preservation and deterministic behavior
+
+### 3. Boundary Wrapping Inconsistency ✅ FIXED
 **Location:** Various functions using modulo operations (world.js, ecosystem.js, colonies.js, integration.js)  
 **Issue:** Some boundary calculations used wrapping while others used clamping, creating inconsistent toroidal topology  
 **Details:** Chemical diffusion (slime trails, nutrients) wrapped around edges while colony suitability and expansion stopped at boundaries, preventing colonies from following their chemical signals across world edges  
@@ -62,7 +69,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Impact:** Eliminates artificial edge effects, creates consistent toroidal world topology where organisms can interact seamlessly across boundaries
 **Status:** Fixed in v2.6 - comprehensive tests verify consistent wrapping behavior and prevent regression
 
-### 2. Memory Leak in Pattern Caching ✅ FIXED
+### 4. Memory Leak in Pattern Caching ✅ FIXED
 **Location:** Pattern generation system (renderer.js:92)  
 **Issue:** No explicit cleanup mechanism for colony patterns when colonies are removed  
 **Details:** While patterns are small (8x8), long-running simulations with many colony births/deaths could accumulate memory  

@@ -81,6 +81,17 @@ function setupWorld(seed, sizeStr) {
     const noise = ValueNoise(seed);
     World.rng = noise.r;
     World.field = noise;
+    
+    // Add RNG state management utilities
+    World.getRNGState = function() {
+        return World.rng && World.rng.getState ? World.rng.getState() : null;
+    };
+    
+    World.setRNGState = function(state) {
+        if (World.rng && World.rng.setState && state) {
+            World.rng.setState(state);
+        }
+    };
     Slime.trail = new Float32Array(W * H);
     Slime.trailNext = new Float32Array(W * H);
     buildEnvironment();

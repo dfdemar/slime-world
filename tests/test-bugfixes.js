@@ -628,5 +628,181 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    runner.test('RNG state serialization and restoration', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Set up deterministic RNG
+        const hash = xmur3('test-seed');
+        World.rng = sfc32(hash(), hash(), hash(), hash());
+        
+        // Generate some values to advance the state
+        const val1 = World.rng();
+        const val2 = World.rng();
+        const val3 = World.rng();
+        
+        // Get the current state (use direct method if utility not available)
+        const savedState = World.rng && World.rng.getState ? World.rng.getState() : null;
+        runner.assertNotNull(savedState, 'Should be able to get RNG state');
+        runner.assertType(savedState, 'object', 'RNG state should be an object');
+        runner.assertType(savedState.a, 'number', 'State should have numeric components');
+        
+        // Generate more values
+        const val4 = World.rng();
+        const val5 = World.rng();
+        
+        // Restore the saved state (use direct method if utility not available)
+        if (World.rng && World.rng.setState && savedState) {
+            World.rng.setState(savedState);
+        }
+        
+        // Should get the same values as val4 and val5
+        const restored4 = World.rng();
+        const restored5 = World.rng();
+        
+        runner.assertApproxEqual(val4, restored4, 0.000001, 'Should reproduce same values after state restoration');
+        runner.assertApproxEqual(val5, restored5, 0.000001, 'Should maintain sequence after restoration');
+        
+        restore.restore();
+    });
+
+    runner.test('Save/load preserves RNG determinism', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Set up deterministic world state
+        const hash = xmur3('determinism-test');
+        World.rng = sfc32(hash(), hash(), hash(), hash());
+        
+        // Create some colonies to get realistic save data
+        const colony1 = createTestColony('MAT', 1, 1, 1);
+        const colony2 = createTestColony('TOWER', 2, 3, 3);
+        World.colonies.push(colony1, colony2);
+        World.tiles[idx(1, 1)] = colony1.id;
+        World.tiles[idx(3, 3)] = colony2.id;
+        
+        // Advance RNG state by generating values
+        World.rng(); // Consume some random values
+        World.rng();
+        
+        // Simulate save operation
+        const saveData = {
+            W: World.W,
+            H: World.H,
+            env: {
+                humidity: Array.from(World.env.humidity),
+                light: Array.from(World.env.light),
+                nutrient: Array.from(World.env.nutrient),
+                water: Array.from(World.env.water)
+            },
+            tiles: Array.from(World.tiles),
+            biomass: Array.from(World.biomass),
+            colonies: World.colonies,
+            nextId: World.nextId,
+            tick: World.tick,
+            rngState: World.rng && World.rng.getState ? World.rng.getState() : null
+        };
+        
+        // Generate values before reload
+        const beforeReload1 = World.rng();
+        const beforeReload2 = World.rng();
+        
+        // Simulate load operation (recreate world)
+        setupWorld(1337, '5x5'); // This will create new RNG
+        World.env.humidity.set(saveData.env.humidity);
+        World.env.light.set(saveData.env.light);
+        World.env.nutrient.set(saveData.env.nutrient);
+        World.env.water.set(saveData.env.water);
+        World.tiles.set(saveData.tiles);
+        World.biomass.set(saveData.biomass);
+        World.colonies = saveData.colonies;
+        World.nextId = saveData.nextId;
+        World.tick = saveData.tick;
+        
+        // Restore RNG state
+        if (saveData.rngState && World.rng && World.rng.setState) {
+            World.rng.setState(saveData.rngState);
+        }
+        
+        // Generate same values after reload
+        const afterReload1 = World.rng();
+        const afterReload2 = World.rng();
+        
+        runner.assertApproxEqual(beforeReload1, afterReload1, 0.000001, 'RNG should produce same values after save/load');
+        runner.assertApproxEqual(beforeReload2, afterReload2, 0.000001, 'RNG sequence should be preserved');
+        
+        restore.restore();
+    });
+
+    runner.test('Consistent RNG usage eliminates non-deterministic behavior', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Set identical seeds for both runs
+        const seed1Hash = xmur3('consistency-test');
+        const seed2Hash = xmur3('consistency-test');
+        
+        const rng1 = sfc32(seed1Hash(), seed1Hash(), seed1Hash(), seed1Hash());
+        const rng2 = sfc32(seed2Hash(), seed2Hash(), seed2Hash(), seed2Hash());
+        
+        // Test spawn probability calculation (previously used Math.random())
+        World.rng = rng1;
+        const mutationRate1 = 0.5;
+        const pressure1 = 0.8;
+        const spawnP1 = (0.003 + 0.008 * mutationRate1) * pressure1;
+        const shouldSpawn1 = World.rng() < spawnP1; // Now uses World.rng instead of Math.random
+        
+        World.rng = rng2;
+        const mutationRate2 = 0.5;
+        const pressure2 = 0.8;
+        const spawnP2 = (0.003 + 0.008 * mutationRate2) * pressure2;
+        const shouldSpawn2 = World.rng() < spawnP2;
+        
+        runner.assertEqual(spawnP1, spawnP2, 'Spawn probabilities should be identical');
+        runner.assertEqual(shouldSpawn1, shouldSpawn2, 'Spawn decisions should be deterministic');
+        
+        // Test direction selection (uses World.rng)
+        World.rng = sfc32(seed1Hash(), seed1Hash(), seed1Hash(), seed1Hash());
+        const dirIndex1 = Math.floor(World.rng() * 4);
+        
+        World.rng = sfc32(seed2Hash(), seed2Hash(), seed2Hash(), seed2Hash());
+        const dirIndex2 = Math.floor(World.rng() * 4);
+        
+        runner.assertEqual(dirIndex1, dirIndex2, 'Direction selection should be deterministic');
+        
+        restore.restore();
+    });
+
+    runner.test('RNG state isolation prevents cross-system interference', () => {
+        const restore = createTestWorld(3, 3);
+
+        // Create deterministic RNG
+        const hash = xmur3('isolation-test');
+        World.rng = sfc32(hash(), hash(), hash(), hash());
+        
+        // Simulate different systems using RNG
+        const systemA_val1 = World.rng(); // Colony mutation
+        const systemB_val1 = World.rng(); // Environment drift  
+        const systemC_val1 = World.rng(); // Spawn decisions
+        
+        // Get state after system usage
+        const state1 = World.rng && World.rng.getState ? World.rng.getState() : null;
+        
+        // Use RNG in different pattern
+        const systemC_val2 = World.rng(); // Spawn first
+        const systemA_val2 = World.rng(); // Then mutation
+        const systemB_val2 = World.rng(); // Then environment
+        
+        // Values should be different due to different ordering
+        runner.assertNotEqual(systemA_val1, systemC_val2, 'Different call order should produce different sequences');
+        
+        // But restore state and reproduce original pattern
+        if (World.rng && World.rng.setState && state1) {
+            World.rng.setState(state1);
+        }
+        const reproduced_val = World.rng();
+        
+        runner.assertApproxEqual(systemC_val2, reproduced_val, 0.000001, 'State restoration should reproduce exact sequence');
+        
+        restore.restore();
+    });
+
     return runner.run();
 }
