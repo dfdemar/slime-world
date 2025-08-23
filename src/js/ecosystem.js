@@ -91,22 +91,15 @@ function suitabilityAt(col, x, y) {
     function s(field) {
         let sum = field[i];
         let count = 1;
-        if (inBounds(x - 1, y)) {
-            sum += field[idx(x - 1, y)];
-            count++;
-        }
-        if (inBounds(x + 1, y)) {
-            sum += field[idx(x + 1, y)];
-            count++;
-        }
-        if (inBounds(x, y - 1)) {
-            sum += field[idx(x, y - 1)];
-            count++;
-        }
-        if (inBounds(x, y + 1)) {
-            sum += field[idx(x, y + 1)];
-            count++;
-        }
+        // Use wrapping for consistent toroidal topology
+        sum += field[idxWrapped(x - 1, y)];
+        count++;
+        sum += field[idxWrapped(x + 1, y)];
+        count++;
+        sum += field[idxWrapped(x, y - 1)];
+        count++;
+        sum += field[idxWrapped(x, y + 1)];
+        count++;
         return sum / count;
     }
 
@@ -138,13 +131,11 @@ function tryExpand(col) {
     let best = null, bestScore = -1, bestI = -1;
     for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
-            const x = cx + dx, y = cy + dy;
-            if (!inBounds(x, y)) continue;
+            const [x, y] = wrapCoords(cx + dx, cy + dy);
             const i = idx(x, y);
             if (World.tiles[i] !== col.id) continue;
             for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-                const nx = x + sx, ny = y + sy;
-                if (!inBounds(nx, ny)) continue;
+                const [nx, ny] = wrapCoords(x + sx, y + sy);
                 const j = idx(nx, ny);
                 const foe = World.tiles[j];
                 const s = suitabilityAt(col, nx, ny);
@@ -199,7 +190,7 @@ function stepEcosystem() {
                 const c = cols[(k + (World.tick % cols.length)) % cols.length];
                 if (!c) continue;
                 c.age++;
-                c.lastFit = suitabilityAt(c, clamp(Math.round(c.x), 0, World.W - 1), clamp(Math.round(c.y), 0, World.H - 1));
+                c.lastFit = suitabilityAt(c, wrapX(Math.round(c.x)), wrapY(Math.round(c.y)));
                 if (!tryExpand(c)) {
                     const decay = (c.lastFit < 0.4) ? 0.985 : 0.992;
                     c.biomass *= decay;
@@ -210,8 +201,8 @@ function stepEcosystem() {
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
                 if (c.biomass > 0.8 && c.lastFit > 0.55 && Math.random() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
-                    const bx = clamp(Math.round(c.x + dir[0] * 2), 0, World.W - 1);
-                    const by = clamp(Math.round(c.y + dir[1] * 2), 0, World.H - 1);
+                    const bx = wrapX(Math.round(c.x + dir[0] * 2));
+                    const by = wrapY(Math.round(c.y + dir[1] * 2));
                     const child = {...c};
                     child.id = World.nextId++;
                     child.parent = c.id;

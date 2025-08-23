@@ -47,6 +47,23 @@ function inBounds(x, y) {
     return x >= 0 && y >= 0 && x < World.W && y < World.H
 }
 
+// Wrapping coordinate utilities for consistent toroidal topology
+function wrapX(x) {
+    return ((x % World.W) + World.W) % World.W;
+}
+
+function wrapY(y) {
+    return ((y % World.H) + World.H) % World.H;
+}
+
+function wrapCoords(x, y) {
+    return [wrapX(x), wrapY(y)];
+}
+
+function idxWrapped(x, y) {
+    return wrapY(y) * World.W + wrapX(x);
+}
+
 function setupWorld(seed, sizeStr) {
     const [W, H] = sizeStr.split('x').map(n => parseInt(n, 10));
     World.W = W;

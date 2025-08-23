@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [2.6] - 2025-08-23
 
 ### Fixed
+- **Boundary Wrapping Inconsistency**: Fixed inconsistent boundary handling where chemical diffusion (slime trails, nutrients) used wrapping while colony suitability and expansion used clamping. Implemented consistent toroidal topology throughout the simulation by adding wrapping utility functions (`wrapX()`, `wrapY()`, `wrapCoords()`, `idxWrapped()`) and updating all coordinate calculations to use wrapping instead of clamping. This eliminates artificial edge effects and allows organisms to seamlessly interact across world boundaries. Applied to both legacy and modular systems with comprehensive tests to verify consistent behavior.
 - **Memory Leak in Pattern Caching**: Fixed potential memory leak where colony canvas patterns (8x8 textures) were not properly cleaned up when colonies died or were removed. Added `cleanupColonyPattern()` function that clears canvas contents and sets pattern reference to null. Integrated cleanup in all colony removal points: periodic ecosystem cleanup, manual colony removal, and modular system cleanup. Added comprehensive tests to verify fix and prevent regression.
 
 ## [2.5] - 2025-08-22

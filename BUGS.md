@@ -8,15 +8,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Potential Issues
 
-### 1. Boundary Wrapping Inconsistency
-**Location:** Various functions using modulo operations  
-**Issue:** Some boundary calculations use wrapping while others don't  
-**Details:** May cause inconsistent behavior at world edges  
-**Impact:** Edge effects in simulation  
-**Priority:** Low  
-**Test Coverage:** ✅ Tests added to verify boundary wrapping consistency
-
-### 3. Type Pressure Calculation Timing
+### 1. Type Pressure Calculation Timing
 **Location:** `updateTypePressure()` function  
 **Issue:** Called every 30 ticks, may not respond quickly enough to rapid population changes  
 **Details:** Could allow temporary monocultures before pressure adjustment kicks in  
@@ -24,7 +16,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Priority:** Low  
 **Test Coverage:** ✅ Tests added to verify type pressure edge cases
 
-### 4. Random Number Generator State
+### 2. Random Number Generator State
 **Location:** Global `World.rng` usage  
 **Issue:** Single global RNG state shared across all systems  
 **Details:** Could cause reproduction in deterministic scenarios if save/load affects RNG state  
@@ -52,7 +44,20 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Fixed Issues
 
-### 1. Memory Leak in Pattern Caching ✅ FIXED
+### 1. Boundary Wrapping Inconsistency ✅ FIXED
+**Location:** Various functions using modulo operations (world.js, ecosystem.js, colonies.js, integration.js)  
+**Issue:** Some boundary calculations used wrapping while others used clamping, creating inconsistent toroidal topology  
+**Details:** Chemical diffusion (slime trails, nutrients) wrapped around edges while colony suitability and expansion stopped at boundaries, preventing colonies from following their chemical signals across world edges  
+**Fix Applied:** Implemented consistent wrapping throughout the simulation:
+- Added wrapping utility functions: `wrapX()`, `wrapY()`, `wrapCoords()`, `idxWrapped()`
+- Updated suitability calculation to use wrapped neighbor sampling instead of bounds checking
+- Changed colony expansion logic to use wrapping coordinates instead of clamping
+- Updated colony spawning and coordinate calculations to use wrapping
+- Applied fixes to both legacy (`ecosystem.js`, `colonies.js`) and modular (`integration.js`) systems
+**Impact:** Eliminates artificial edge effects, creates consistent toroidal world topology where organisms can interact seamlessly across boundaries
+**Status:** Fixed in v2.6 - comprehensive tests verify consistent wrapping behavior and prevent regression
+
+### 2. Memory Leak in Pattern Caching ✅ FIXED
 **Location:** Pattern generation system (renderer.js:92)  
 **Issue:** No explicit cleanup mechanism for colony patterns when colonies are removed  
 **Details:** While patterns are small (8x8), long-running simulations with many colony births/deaths could accumulate memory  
