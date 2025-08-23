@@ -16,18 +16,24 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Priority:** Low  
 **Test Coverage:** ✅ Test added to verify pattern cleanup behavior
 
-### 2. Nutrient Starvation Balance ✅ INVESTIGATED
-**Location:** `starvationSweep()` function (ecosystem.js:6)  
-**Issue:** EAT archetype lacks advantage in nutrient-rich environments despite no photosynthesis  
-**Details:** Energy formula `0.7*nutrient + 0.3*photosym*light` requires 0.5 nutrients for ALL archetypes to survive without light. EAT (photosym=0) has no compensation mechanism for its photosynthesis limitation, making it equally dependent on nutrients as photosynthetic types in low-light conditions.  
-**Analysis Results:**
-- Survival threshold: 0.35 energy units
-- Without light: ALL archetypes need exactly 0.5 nutrients to survive  
-- With moderate light (0.5): TOWER needs only 0.339 nutrients vs EAT needing 0.5
-- Current balance disadvantages non-photosynthetic archetypes
-**Impact:** EAT archetype is unbalanced - should excel in nutrient-rich, low-light environments  
-**Priority:** Medium  
-**Test Coverage:** ✅ Comprehensive starvation balance tests added to verify energy calculations across all archetypes
+### 2. Nutrient Starvation Balance ✅ FIXED
+**Location:** `starvationSweep()` function (ecosystem.js:42)  
+**Issue:** EAT archetype lacked advantage in nutrient-rich environments despite no photosynthesis  
+**Details:** Original energy formula `0.7*nutrient + 0.3*photosym*light` required 0.5 nutrients for ALL archetypes to survive without light. EAT (photosym=0) had no compensation mechanism for its photosynthesis limitation.  
+**Fix Applied:** Enhanced energy formula with non-photosynthetic bonus:
+```javascript
+const NON_PHOTOSYNTHETIC_BONUS = 0.5; // Configurable constant
+const nonPhotoBonus = ps < 0.1 ? NON_PHOTOSYNTHETIC_BONUS * (1 - ps * 10) : 0;
+const energy = 0.7 * n + 0.3 * ps * l + nonPhotoBonus * n;
+```
+**Results:**
+- EAT archetype now receives 50% bonus nutrient efficiency  
+- Balance maintained: bonus decreases as photosynthesis increases
+- EAT can now survive moderate conditions (0.3 nutrient, 0.3 light)
+- Non-photosynthetic types are competitive in nutrient-rich environments
+**Impact:** EAT archetype now properly excels in nutrient-rich, low-light environments  
+**Priority:** ✅ RESOLVED  
+**Test Coverage:** ✅ Updated tests verify fix and prevent regression
 
 ### 3. Boundary Wrapping Inconsistency
 **Location:** Various functions using modulo operations  
