@@ -65,7 +65,7 @@ function createUnifiedColony(type, x, y, parent = null) {
             modularColony.pattern = createPatternForColony(modularColony);
             World.colonies.push(modularColony);
 
-            const X = wrapX(x), Y = wrapY(y);
+            const X = clampX(x), Y = clampY(y);
             const i = idx(X, Y);
             World.tiles[i] = modularColony.id;
             World.biomass[i] = Math.max(World.biomass[i] || 0, 0.4);
@@ -275,9 +275,9 @@ function stepUnifiedEcosystem() {
                 c.age++;
 
                 // Use unified suitability calculation
-                const wrappedX = wrapX(Math.round(c.x));
-                const wrappedY = wrapY(Math.round(c.y));
-                c.lastFit = calculateUnifiedSuitability(c, wrappedX, wrappedY);
+                const clampedX = clampX(Math.round(c.x));
+                const clampedY = clampY(Math.round(c.y));
+                c.lastFit = calculateUnifiedSuitability(c, clampedX, clampedY);
 
                 // Try expansion
                 if (!tryExpand(c)) {
@@ -293,8 +293,8 @@ function stepUnifiedEcosystem() {
 
                 if (c.biomass > 0.8 && c.lastFit > 0.55 && World.rng() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
-                    const bx = wrapX(Math.round(c.x + dir[0] * 2));
-                    const by = wrapY(Math.round(c.y + dir[1] * 2));
+                    const bx = clampX(Math.round(c.x + dir[0] * 2));
+                    const by = clampY(Math.round(c.y + dir[1] * 2));
 
                     const child = createUnifiedColony(c.type, bx, by, c);
                     if (child) {

@@ -150,21 +150,23 @@ function updateEnvironmentCache() {
         for (let x = 0; x < W; x++) {
             const i = idx(x, y);
             
-            // Calculate averaged humidity (center + 4 neighbors)
+            // Calculate averaged humidity (center + valid neighbors only)
             let humSum = humidity[i];
-            humSum += humidity[idxWrapped(x - 1, y)];
-            humSum += humidity[idxWrapped(x + 1, y)];
-            humSum += humidity[idxWrapped(x, y - 1)];
-            humSum += humidity[idxWrapped(x, y + 1)];
-            World.environmentCache.avgHumidity[i] = humSum / 5;
+            let humCount = 1;
+            if (inBounds(x - 1, y)) { humSum += humidity[idx(x - 1, y)]; humCount++; }
+            if (inBounds(x + 1, y)) { humSum += humidity[idx(x + 1, y)]; humCount++; }
+            if (inBounds(x, y - 1)) { humSum += humidity[idx(x, y - 1)]; humCount++; }
+            if (inBounds(x, y + 1)) { humSum += humidity[idx(x, y + 1)]; humCount++; }
+            World.environmentCache.avgHumidity[i] = humSum / humCount;
             
-            // Calculate averaged light (center + 4 neighbors)
+            // Calculate averaged light (center + valid neighbors only)
             let lightSum = light[i];
-            lightSum += light[idxWrapped(x - 1, y)];
-            lightSum += light[idxWrapped(x + 1, y)];
-            lightSum += light[idxWrapped(x, y - 1)];
-            lightSum += light[idxWrapped(x, y + 1)];
-            World.environmentCache.avgLight[i] = lightSum / 5;
+            let lightCount = 1;
+            if (inBounds(x - 1, y)) { lightSum += light[idx(x - 1, y)]; lightCount++; }
+            if (inBounds(x + 1, y)) { lightSum += light[idx(x + 1, y)]; lightCount++; }
+            if (inBounds(x, y - 1)) { lightSum += light[idx(x, y - 1)]; lightCount++; }
+            if (inBounds(x, y + 1)) { lightSum += light[idx(x, y + 1)]; lightCount++; }
+            World.environmentCache.avgLight[i] = lightSum / lightCount;
         }
     }
     
@@ -247,11 +249,13 @@ function tryExpand(col) {
     let best = null, bestScore = -1, bestI = -1;
     for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
-            const [x, y] = wrapCoords(cx + dx, cy + dy);
+            const x = cx + dx, y = cy + dy;
+            if (!inBounds(x, y)) continue; // Skip out-of-bounds positions
             const i = idx(x, y);
             if (World.tiles[i] !== col.id) continue;
             for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-                const [nx, ny] = wrapCoords(x + sx, y + sy);
+                const nx = x + sx, ny = y + sy;
+                if (!inBounds(nx, ny)) continue; // Skip expansion beyond boundaries
                 const j = idx(nx, ny);
                 const foe = World.tiles[j];
                 const s = suitabilityAt(col, nx, ny);
@@ -306,7 +310,7 @@ function stepEcosystem() {
                 const c = cols[(k + (World.tick % cols.length)) % cols.length];
                 if (!c) continue;
                 c.age++;
-                c.lastFit = suitabilityAt(c, wrapX(Math.round(c.x)), wrapY(Math.round(c.y)));
+                c.lastFit = suitabilityAt(c, clampX(Math.round(c.x)), clampY(Math.round(c.y)));
                 if (!tryExpand(c)) {
                     const decay = (c.lastFit < 0.4) ? 0.985 : 0.992;
                     c.biomass *= decay;
@@ -317,8 +321,8 @@ function stepEcosystem() {
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
                 if (c.biomass > 0.8 && c.lastFit > 0.55 && World.rng() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
-                    const bx = wrapX(Math.round(c.x + dir[0] * 2));
-                    const by = wrapY(Math.round(c.y + dir[1] * 2));
+                    const bx = clampX(Math.round(c.x + dir[0] * 2));
+                    const by = clampY(Math.round(c.y + dir[1] * 2));
                     const child = {...c};
                     child.id = World.nextId++;
                     child.parent = c.id;

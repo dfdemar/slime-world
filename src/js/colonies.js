@@ -66,7 +66,7 @@ function newColony(type, x, y, parent = null) {
     // per-colony pattern
     c.pattern = createPatternForColony(c);
     World.colonies.push(c);
-    const X = wrapX(x), Y = wrapY(y);
+    const X = clampX(x), Y = clampY(y);
     const i = idx(X, Y);
     World.tiles[i] = id;
     World.biomass[i] = Math.max(World.biomass[i] || 0, 0.4);

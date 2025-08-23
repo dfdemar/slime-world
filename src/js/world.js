@@ -43,25 +43,25 @@ function idx(x, y) {
     return y * World.W + x
 }
 
+// Boundary clamping utilities for impenetrable barriers
+function clampX(x) {
+    return Math.max(0, Math.min(x, World.W - 1));
+}
+
+function clampY(y) {
+    return Math.max(0, Math.min(y, World.H - 1));
+}
+
+function clampCoords(x, y) {
+    return [clampX(x), clampY(y)];
+}
+
+function idxClamped(x, y) {
+    return clampY(y) * World.W + clampX(x);
+}
+
 function inBounds(x, y) {
-    return x >= 0 && y >= 0 && x < World.W && y < World.H
-}
-
-// Wrapping coordinate utilities for consistent toroidal topology
-function wrapX(x) {
-    return ((x % World.W) + World.W) % World.W;
-}
-
-function wrapY(y) {
-    return ((y % World.H) + World.H) % World.H;
-}
-
-function wrapCoords(x, y) {
-    return [wrapX(x), wrapY(y)];
-}
-
-function idxWrapped(x, y) {
-    return wrapY(y) * World.W + wrapX(x);
+    return x >= 0 && x < World.W && y >= 0 && y < World.H;
 }
 
 function setupWorld(seed, sizeStr) {

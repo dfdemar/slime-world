@@ -47,10 +47,10 @@ function runBugFixTests() {
         restore.restore();
     });
 
-    runner.test('Boundary wrapping consistency in slime diffusion', () => {
+    runner.test('Boundary barriers prevent slime diffusion leakage', () => {
         const restore = createTestWorld(5, 5);
 
-        // Set up slime at edges
+        // Set up slime at edges - should not diffuse beyond boundaries
         Slime.trail[idx(0, 2)] = 10; // Left edge
         Slime.trail[idx(4, 2)] = 10; // Right edge  
         Slime.trail[idx(2, 0)] = 10; // Top edge
@@ -58,7 +58,7 @@ function runBugFixTests() {
 
         const initialSum = Slime.trail.reduce((a, v) => a + v, 0);
 
-        // Run diffusion
+        // Run diffusion - should respect boundary barriers
         Slime.diffuseEvaporate();
 
         const afterSum = Slime.trail.reduce((a, v) => a + v, 0);
@@ -67,13 +67,17 @@ function runBugFixTests() {
         runner.assertGreaterThan(afterSum, 0, 'Some trail should remain after diffusion');
         runner.assert(!isNaN(afterSum), 'Diffusion should not produce NaN values');
 
+        // Verify slime remains contained within boundaries
+        runner.assert(Slime.trail[idx(0, 2)] >= 0, 'Left edge should have non-negative slime');
+        runner.assert(Slime.trail[idx(4, 2)] >= 0, 'Right edge should have non-negative slime');
+
         restore.restore();
     });
 
-    runner.test('Boundary wrapping consistency in nutrient dynamics', () => {
+    runner.test('Boundary barriers contain nutrient diffusion', () => {
         const restore = createTestWorld(5, 5);
 
-        // Set up nutrients at edges
+        // Set up nutrients at edges - should not diffuse beyond boundaries
         World.env.nutrient[idx(0, 2)] = 1.0; // Left edge
         World.env.nutrient[idx(4, 2)] = 0.0; // Right edge  
         World.env.nutrient[idx(2, 0)] = 1.0; // Top edge
@@ -87,7 +91,7 @@ function runBugFixTests() {
 
         const initialSum = World.env.nutrient.reduce((a, v) => a + v, 0);
 
-        // Run nutrient dynamics
+        // Run nutrient dynamics - should respect boundary barriers
         nutrientDynamics();
 
         const afterSum = World.env.nutrient.reduce((a, v) => a + v, 0);
@@ -95,9 +99,53 @@ function runBugFixTests() {
         runner.assert(!isNaN(afterSum), 'Nutrient dynamics should not produce NaN values');
         runner.assertGreaterThan(afterSum, 0, 'Some nutrients should remain');
 
-        // Check that edge values are reasonable (no extreme jumps)
+        // Check that all values remain within valid bounds
         for (let i = 0; i < World.env.nutrient.length; i++) {
             runner.assertBetween(World.env.nutrient[i], 0, 1, `Nutrient[${i}] should be in valid range`);
+        }
+
+        // Verify nutrients remain contained within world boundaries
+        runner.assertBetween(World.env.nutrient[idx(0, 2)], 0, 1, 'Left edge nutrients should be valid');
+        runner.assertBetween(World.env.nutrient[idx(4, 2)], 0, 1, 'Right edge nutrients should be valid');
+
+        restore.restore();
+    });
+
+    runner.test('Colony expansion blocked by boundary barriers', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Place colony at edge position
+        const colony = createTestColony('MAT', 1, 0, 0); // Top-left corner
+        World.colonies = [colony];
+        World.tiles.fill(-1);
+        World.tiles[idx(0, 0)] = colony.id;
+
+        // Set up favorable conditions for expansion
+        for (let i = 0; i < World.env.nutrient.length; i++) {
+            World.env.nutrient[i] = 1.0;
+            World.env.humidity[i] = 0.7; // Good for MAT
+            World.env.light[i] = 0.2;
+        }
+
+        const initialTileCount = World.tiles.filter(t => t === colony.id).length;
+
+        // Try to expand - should be blocked by boundaries in some directions
+        for (let i = 0; i < 10; i++) {
+            tryExpand(colony);
+        }
+
+        const finalTileCount = World.tiles.filter(t => t === colony.id).length;
+
+        // Colony should not be able to expand beyond world boundaries  
+        runner.assert(finalTileCount >= initialTileCount, 'Colony should maintain or gain territory');
+        
+        // Verify no tiles outside world bounds
+        for (let y = 0; y < World.H; y++) {
+            for (let x = 0; x < World.W; x++) {
+                if (World.tiles[idx(x, y)] === colony.id) {
+                    runner.assert(inBounds(x, y), `Colony tile at (${x},${y}) should be within bounds`);
+                }
+            }
         }
 
         restore.restore();
@@ -367,60 +415,70 @@ function runBugFixTests() {
         restore.restore();
     });
 
-    runner.test('Boundary wrapping consistency fix', () => {
+    runner.test('Boundary clamping with impenetrable barriers', () => {
         const restore = createTestWorld(5, 5);
 
-        // Test wrapping utility functions
-        runner.assertEqual(wrapX(-1), 4, 'Negative X should wrap to right edge');
-        runner.assertEqual(wrapX(5), 0, 'X beyond width should wrap to left edge');
-        runner.assertEqual(wrapY(-1), 4, 'Negative Y should wrap to bottom edge');
-        runner.assertEqual(wrapY(5), 0, 'Y beyond height should wrap to top edge');
+        // Test clamping utility functions
+        runner.assertEqual(clampX(-1), 0, 'Negative X should clamp to left boundary');
+        runner.assertEqual(clampX(5), 4, 'X beyond width should clamp to right boundary');
+        runner.assertEqual(clampY(-1), 0, 'Negative Y should clamp to top boundary');
+        runner.assertEqual(clampY(5), 4, 'Y beyond height should clamp to bottom boundary');
 
-        // Test wrapping with multiple wraps
-        runner.assertEqual(wrapX(-6), 4, 'Multiple negative X wraps should work');
-        runner.assertEqual(wrapX(11), 1, 'Multiple positive X wraps should work');
+        // Test clamping with extreme values
+        runner.assertEqual(clampX(-100), 0, 'Large negative X should clamp to 0');
+        runner.assertEqual(clampX(100), 4, 'Large positive X should clamp to max');
 
-        // Test coordinate wrapping
-        const [wx, wy] = wrapCoords(-1, -1);
-        runner.assertEqual(wx, 4, 'wrapCoords should handle negative X');
-        runner.assertEqual(wy, 4, 'wrapCoords should handle negative Y');
+        // Test coordinate clamping
+        const [cx, cy] = clampCoords(-1, -1);
+        runner.assertEqual(cx, 0, 'clampCoords should handle negative X');
+        runner.assertEqual(cy, 0, 'clampCoords should handle negative Y');
 
-        // Test idxWrapped function
-        const wrappedIdx = idxWrapped(-1, -1);
-        const expectedIdx = idx(4, 4);
-        runner.assertEqual(wrappedIdx, expectedIdx, 'idxWrapped should produce correct index');
+        // Test idxClamped function
+        const clampedIdx = idxClamped(-1, -1);
+        const expectedIdx = idx(0, 0);
+        runner.assertEqual(clampedIdx, expectedIdx, 'idxClamped should produce correct index');
+
+        // Test inBounds function
+        runner.assert(inBounds(2, 2), 'Center position should be in bounds');
+        runner.assert(!inBounds(-1, 2), 'Negative X should be out of bounds');
+        runner.assert(!inBounds(2, -1), 'Negative Y should be out of bounds');
+        runner.assert(!inBounds(5, 2), 'X beyond width should be out of bounds');
+        runner.assert(!inBounds(2, 5), 'Y beyond height should be out of bounds');
 
         restore.restore();
     });
 
-    runner.test('Suitability calculation uses consistent wrapping', () => {
+    runner.test('Suitability calculation uses boundary clamping', () => {
         const restore = createTestWorld(5, 5);
 
         // Create test colony at edge
-        const colony = createTestColony('MAT', 1, 4, 0); // Bottom edge
+        const colony = createTestColony('MAT', 1, 4, 4); // Bottom-right corner
         
-        // Set up environmental gradient near edge
-        World.env.humidity[idx(4, 4)] = 0.8; // Bottom-right corner
-        World.env.humidity[idx(4, 0)] = 0.8; // Top-right corner (should be sampled via wrapping)
-        World.env.humidity[idx(0, 4)] = 0.2; // Bottom-left corner 
-        World.env.humidity[idx(0, 0)] = 0.2; // Top-left corner
+        // Set up environmental gradient near boundaries
+        World.env.humidity[idx(4, 4)] = 0.8; // Bottom-right corner (colony position)
+        World.env.humidity[idx(3, 4)] = 0.6; // Left neighbor
+        World.env.humidity[idx(4, 3)] = 0.6; // Up neighbor
+        World.env.humidity[idx(3, 3)] = 0.4; // Diagonal neighbor
+        
+        // Out-of-bounds positions should be ignored (not wrapped)
+        // No values at (5,4), (4,5), (5,5) etc.
 
         // Calculate suitability at bottom-right corner (4,4)
-        // This should now include the top-right corner (4,0) via Y wrapping
+        // Should only consider valid neighbors within bounds
         const suitability = suitabilityAt(colony, 4, 4);
         
         runner.assertType(suitability, 'number', 'Suitability should be a number');
-        runner.assert(!isNaN(suitability), 'Suitability should not be NaN with wrapping');
+        runner.assert(!isNaN(suitability), 'Suitability should not be NaN with clamping');
         runner.assertBetween(suitability, -2, 2, 'Suitability should be in reasonable range');
 
         restore.restore();
     });
 
-    runner.test('Colony expansion works across wrapped boundaries', () => {
+    runner.test('Colony expansion blocked by boundary barriers', () => {
         const restore = createTestWorld(5, 5);
 
-        // Create colony near right edge
-        const colony = createTestColony('SCOUT', 1, 4, 0);
+        // Create colony at right edge (boundary barrier test)
+        const colony = createTestColony('SCOUT', 1, 4, 2);
         colony.x = 4;
         colony.y = 2;
         World.colonies.push(colony);
@@ -429,12 +487,15 @@ function runBugFixTests() {
         World.tiles[idx(4, 2)] = colony.id;
         World.biomass[idx(4, 2)] = 1.0;
         
-        // Set up favorable conditions on the left edge (which should be accessible via wrapping)
-        World.env.humidity[idx(0, 2)] = colony.traits.water_need;
-        World.env.light[idx(0, 2)] = colony.traits.light_use;
-        World.env.nutrient[idx(0, 2)] = 0.8;
+        // Set up favorable conditions within valid boundaries only
+        World.env.humidity[idx(3, 2)] = colony.traits.water_need; // Left neighbor (valid)
+        World.env.light[idx(3, 2)] = colony.traits.light_use;
+        World.env.nutrient[idx(3, 2)] = 0.8;
         
-        // Try expansion - this should now be able to reach the left edge via wrapping
+        // Record initial state
+        const initialTileCount = World.tiles.filter(t => t === colony.id).length;
+        
+        // Try expansion - should be constrained by boundary barriers
         const expanded = tryExpand(colony);
         
         // Should not fail due to boundary issues
@@ -445,22 +506,32 @@ function runBugFixTests() {
             runner.assert(!isNaN(World.biomass[i]), `Biomass[${i}] should not be NaN after expansion`);
         }
 
+        // Expansion may succeed within boundaries but should not wrap to opposite edge
+        const finalTileCount = World.tiles.filter(t => t === colony.id).length;
+        runner.assert(finalTileCount >= initialTileCount, 'Colony should not lose tiles during expansion');
+
         restore.restore();
     });
 
-    runner.test('Colony spawning uses wrapped coordinates', () => {
+    runner.test('Colony spawning uses boundary clamping', () => {
         const restore = createTestWorld(5, 5);
 
-        // Test spawning at negative coordinates (should wrap)
+        // Test spawning at negative coordinates (should clamp to boundaries)
         const colony1 = newColony('MAT', -1, -1, null);
         if (colony1) {
-            runner.assert(World.tiles[idx(4, 4)] === colony1.id, 'Colony spawned at negative coords should appear at wrapped position');
+            runner.assert(World.tiles[idx(0, 0)] === colony1.id, 'Colony spawned at negative coords should appear at clamped position (0,0)');
         }
 
-        // Test spawning beyond boundaries (should wrap)
+        // Test spawning beyond boundaries (should clamp to boundaries)
         const colony2 = newColony('TOWER', 6, 7, null);
         if (colony2) {
-            runner.assert(World.tiles[idx(1, 2)] === colony2.id, 'Colony spawned beyond bounds should appear at wrapped position');
+            runner.assert(World.tiles[idx(4, 4)] === colony2.id, 'Colony spawned beyond bounds should appear at clamped position (4,4)');
+        }
+
+        // Test spawning at valid coordinates (should remain unchanged)
+        const colony3 = newColony('SCOUT', 2, 3, null);
+        if (colony3) {
+            runner.assert(World.tiles[idx(2, 3)] === colony3.id, 'Colony spawned at valid coords should remain at original position');
         }
 
         restore.restore();

@@ -42,18 +42,19 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Impact:** Guarantees complete determinism and reproducibility across save/load operations, eliminating non-deterministic behavior in edge cases  
 **Status:** Fixed in v2.6 - comprehensive tests verify RNG state preservation and deterministic behavior
 
-### 3. Boundary Wrapping Inconsistency ✅ FIXED
-**Location:** Various functions using modulo operations (world.js, ecosystem.js, colonies.js, integration.js)  
-**Issue:** Some boundary calculations used wrapping while others used clamping, creating inconsistent toroidal topology  
-**Details:** Chemical diffusion (slime trails, nutrients) wrapped around edges while colony suitability and expansion stopped at boundaries, preventing colonies from following their chemical signals across world edges  
-**Fix Applied:** Implemented consistent wrapping throughout the simulation:
-- Added wrapping utility functions: `wrapX()`, `wrapY()`, `wrapCoords()`, `idxWrapped()`
-- Updated suitability calculation to use wrapped neighbor sampling instead of bounds checking
-- Changed colony expansion logic to use wrapping coordinates instead of clamping
-- Updated colony spawning and coordinate calculations to use wrapping
+### 3. Boundary Consistency with Impenetrable Barriers ✅ FIXED
+**Location:** Various functions using coordinate calculations (world.js, ecosystem.js, colonies.js, integration.js)  
+**Issue:** Inconsistent boundary handling where some systems used wrapping while others used different approaches, creating mixed boundary behaviors  
+**Details:** The simulation needed consistent boundary treatment where world edges act as impenetrable barriers that organisms cannot cross, rather than wrapping around to the opposite side. This ensures realistic ecosystem constraints and prevents unrealistic "teleportation" effects.  
+**Fix Applied:** Implemented consistent boundary clamping throughout the simulation:
+- Added boundary clamping functions: `clampX()`, `clampY()`, `clampCoords()`, `idxClamped()`, `inBounds()`
+- Updated environment averaging to only include valid neighbors within bounds
+- Modified colony expansion logic to respect boundary barriers and prevent out-of-bounds movement  
+- Updated colony spawning and coordinate calculations to use boundary clamping
+- Enhanced suitability calculation to handle edge cases with fewer neighbors
 - Applied fixes to both legacy (`ecosystem.js`, `colonies.js`) and modular (`integration.js`) systems
-**Impact:** Eliminates artificial edge effects, creates consistent toroidal world topology where organisms can interact seamlessly across boundaries
-**Status:** Fixed in v2.6 - comprehensive tests verify consistent wrapping behavior and prevent regression
+**Impact:** Creates realistic boundary constraints where world edges act as impenetrable barriers, preventing organisms from expanding beyond simulation boundaries while maintaining consistent environmental calculations
+**Status:** Fixed in v2.6 - comprehensive tests verify boundary clamping behavior and barrier effectiveness
 
 ### 4. Suitability Calculation Overhead ✅ FIXED
 **Location:** `suitabilityAt()` function (ecosystem.js:173-222)  
