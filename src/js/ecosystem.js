@@ -119,44 +119,125 @@ function nutrientDynamics() {
 }
 
 /* ===== Suitability & Growth ===== */
-function suitabilityAt(col, x, y) {
-    const {humidity, light, nutrient, water} = World.env;
-    const i = idx(x, y);
 
-    function s(field) {
-        let sum = field[i];
-        let count = 1;
-        // Use wrapping for consistent toroidal topology
-        sum += field[idxWrapped(x - 1, y)];
-        count++;
-        sum += field[idxWrapped(x + 1, y)];
-        count++;
-        sum += field[idxWrapped(x, y - 1)];
-        count++;
-        sum += field[idxWrapped(x, y + 1)];
-        count++;
-        return sum / count;
+// Suitability calculation optimization
+World.suitabilityCache = new Map();
+World.environmentCache = null;
+World.lastEnvironmentTick = -1;
+
+function updateEnvironmentCache() {
+    if (World.lastEnvironmentTick === World.tick && World.environmentCache) {
+        return; // Cache is still valid
     }
+    
+    // If cache was manually cleared, force update
+    if (!World.environmentCache) {
+        World.lastEnvironmentTick = -1;
+    }
+    
+    const {humidity, light, nutrient, water} = World.env;
+    const {W, H} = World;
+    
+    // Pre-calculate averaged environmental fields for all positions
+    World.environmentCache = {
+        avgHumidity: new Float32Array(W * H),
+        avgLight: new Float32Array(W * H),
+        nutrient: nutrient, // Direct reference, no averaging needed
+        water: water // Direct reference, no averaging needed
+    };
+    
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = idx(x, y);
+            
+            // Calculate averaged humidity (center + 4 neighbors)
+            let humSum = humidity[i];
+            humSum += humidity[idxWrapped(x - 1, y)];
+            humSum += humidity[idxWrapped(x + 1, y)];
+            humSum += humidity[idxWrapped(x, y - 1)];
+            humSum += humidity[idxWrapped(x, y + 1)];
+            World.environmentCache.avgHumidity[i] = humSum / 5;
+            
+            // Calculate averaged light (center + 4 neighbors)
+            let lightSum = light[i];
+            lightSum += light[idxWrapped(x - 1, y)];
+            lightSum += light[idxWrapped(x + 1, y)];
+            lightSum += light[idxWrapped(x, y - 1)];
+            lightSum += light[idxWrapped(x, y + 1)];
+            World.environmentCache.avgLight[i] = lightSum / 5;
+        }
+    }
+    
+    World.lastEnvironmentTick = World.tick;
+}
 
-    const h = s(humidity), l = s(light), n = nutrient[i], w = water[i];
+function clearSuitabilityCache() {
+    World.suitabilityCache.clear();
+}
+
+function suitabilityAt(col, x, y) {
+    const i = idx(x, y);
+    
+    // Create cache key based on position, colony type, and changing factors
+    // Don't include tick for performance - cache within same tick
+    const envHash = Math.round((World.env.humidity[i] + World.env.light[i] + World.env.nutrient[i] + World.env.water[i]) * 1000);
+    const trailValue = Math.round(Slime.trail[i] * 100);
+    const densityValue = Math.round(World.biomass[i] * 100);
+    const pressureValue = Math.round((World.typePressure[col.type] ?? 1) * 1000);
+    const cacheKey = `${x},${y},${col.type},${pressureValue},${densityValue},${envHash},${trailValue}`;
+    
+    // Check cache first
+    if (World.suitabilityCache.has(cacheKey)) {
+        return World.suitabilityCache.get(cacheKey);
+    }
+    
+    // Update environment cache if needed
+    updateEnvironmentCache();
+    
+    // Use pre-calculated environmental averages with validation
+    const h = clamp(World.environmentCache.avgHumidity[i] || 0, 0, 1);
+    const l = clamp(World.environmentCache.avgLight[i] || 0, 0, 1);
+    const n = clamp(World.environmentCache.nutrient[i] || 0, 0, 1);
+    const w = World.environmentCache.water[i] || 0;
+    
     const T = col.traits;
     const B = TypeBehavior[col.type] || TypeBehavior.MAT;
-    const waterFit = 1.0 - Math.abs(h - T.water_need);
-    const lightFit = T.photosym > 0 ? (0.55 * (1.0 - Math.abs(l - T.light_use)) + 0.45 * T.photosym * l) : (1.0 - 0.6 * l);
+    
+    // Validate trait values to prevent NaN
+    const waterNeed = clamp(T.water_need || 0.5, 0, 1);
+    const lightUse = clamp(T.light_use || 0.5, 0, 1);
+    const photosym = clamp(T.photosym || 0, 0, 1);
+    
+    const waterFit = 1.0 - Math.abs(h - waterNeed);
+    const lightFit = photosym > 0 ? (0.55 * (1.0 - Math.abs(l - lightUse)) + 0.45 * photosym * l) : (1.0 - 0.6 * l);
     const trSat = Slime.sat(Slime.trail[i]);
     const denom = Math.max(1e-6, (B.nutrientW || 0) + (B.trailW || 0));
     const chemo = ((B.nutrientW || 0) * n + (B.trailW || 0) * trSat) / denom;
-    // Bonuses/penalties
+    
+    // Bonuses/penalties with validation
     let raftBonus = (col.type === 'FLOAT') ? (w ? 0.25 : -0.08) : 0;
     raftBonus += (B.waterAffinity && w) ? B.waterAffinity : 0;
     let towerPenalty = (col.type === 'TOWER' && w) ? -0.12 : 0;
+    
     const base = clamp(0.06 * waterFit + 0.06 * lightFit + 0.88 * chemo + raftBonus + towerPenalty, 0, 1);
-    // Capacity pressure
-    const cap = World.capacity;
-    const density = World.biomass[i];
+    
+    // Capacity pressure with validation
+    const cap = Math.max(0.1, World.capacity || 1.0);
+    const density = Math.max(0, World.biomass[i] || 0);
     const capPenalty = -0.35 * clamp((density - cap), 0, 1);
-    const pressure = World.typePressure[col.type] ?? 1;
-    return clamp(base * pressure + capPenalty, 0, 1);
+    const pressure = clamp(World.typePressure[col.type] ?? 1, 0.1, 1.5);
+    
+    const result = clamp(base * pressure + capPenalty, 0, 1);
+    
+    // Validate final result
+    const validResult = (isNaN(result) || !isFinite(result)) ? 0 : result;
+    
+    // Cache the result but limit cache size to prevent memory issues
+    if (World.suitabilityCache.size < 10000) {
+        World.suitabilityCache.set(cacheKey, validResult);
+    }
+    
+    return validResult;
 }
 
 function tryExpand(col) {
@@ -266,6 +347,8 @@ function stepEcosystem() {
         nutrientDynamics();
         // Check for adaptive type pressure updates every 5 ticks
         if (World.tick % 5 === 0) updateTypePressure();
+        // Clear suitability cache periodically to prevent memory growth and ensure fresh calculations
+        if (World.tick % 30 === 0) clearSuitabilityCache();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
             // Clean up patterns before removing colonies

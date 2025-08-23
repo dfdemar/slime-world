@@ -97,5 +97,9 @@ function setupWorld(seed, sizeStr) {
     buildEnvironment();
     seedInitialColonies();
     updateTypePressure(true); // Force initial calculation
+    // Initialize suitability optimization caches
+    if (!World.suitabilityCache) World.suitabilityCache = new Map();
+    World.environmentCache = null;
+    World.lastEnvironmentTick = -1;
     refreshLiveStats();
 }

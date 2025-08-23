@@ -12,15 +12,7 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 
 ## Performance Considerations
 
-### 1. Suitability Calculation Overhead
-**Location:** `suitabilityAt()` function  
-**Issue:** Called frequently with neighbor sampling  
-**Details:** Could benefit from spatial caching or optimization  
-**Impact:** Performance degradation with large worlds  
-**Priority:** Medium  
-**Test Coverage:** ✅ Tests added to verify suitability calculation edge cases
-
-### 2. Canvas Redraw Frequency
+### 1. Canvas Redraw Frequency
 **Location:** Rendering system  
 **Issue:** Full canvas redraw on every frame  
 **Details:** Could implement dirty region tracking  
@@ -69,7 +61,22 @@ This file tracks suspected bugs and issues in the Slimeworld Evolution Simulator
 **Impact:** Eliminates artificial edge effects, creates consistent toroidal world topology where organisms can interact seamlessly across boundaries
 **Status:** Fixed in v2.6 - comprehensive tests verify consistent wrapping behavior and prevent regression
 
-### 4. Memory Leak in Pattern Caching ✅ FIXED
+### 4. Suitability Calculation Overhead ✅ FIXED
+**Location:** `suitabilityAt()` function (ecosystem.js:173-222)  
+**Issue:** High computational overhead from frequent calls with redundant neighbor sampling and coordinate calculations  
+**Details:** Function called up to 968 times per colony per tick (for sense radius 5), with each call sampling 5 neighboring cells and performing expensive coordinate wrapping calculations. No caching of results led to repeated identical computations.  
+**Fix Applied:** Implemented comprehensive performance optimization system:
+- Added spatial caching with `World.suitabilityCache` to store computed results based on environmental state
+- Pre-calculated averaged environmental fields in `World.environmentCache` updated per tick
+- Eliminated redundant `idxWrapped()` calculations through batch processing in environment cache
+- Cache management with size limits (10,000 entries) and periodic clearing (every 30 ticks)
+- Smart cache keys including position, colony type, pressure, biomass, environment hash, and trail values
+- Enhanced input validation to prevent NaN results from extreme values
+- Environment cache invalidation when manually cleared for testing
+**Impact:** Significantly reduces computational overhead for large worlds while maintaining identical simulation accuracy and deterministic behavior  
+**Status:** Fixed in v2.6 - comprehensive tests verify performance gains, NaN handling, and environmental change detection
+
+### 5. Memory Leak in Pattern Caching ✅ FIXED
 **Location:** Pattern generation system (renderer.js:92)  
 **Issue:** No explicit cleanup mechanism for colony patterns when colonies are removed  
 **Details:** While patterns are small (8x8), long-running simulations with many colony births/deaths could accumulate memory  

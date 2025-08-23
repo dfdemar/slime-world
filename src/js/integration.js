@@ -320,6 +320,8 @@ function stepUnifiedEcosystem() {
 
         // Check for adaptive type pressure updates every 5 ticks
         if (World.tick % 5 === 0) updateTypePressure();
+        // Clear suitability cache periodically to prevent memory growth and ensure fresh calculations
+        if (World.tick % 30 === 0) clearSuitabilityCache();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
             // Clean up patterns before removing colonies

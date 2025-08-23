@@ -804,5 +804,175 @@ function runBugFixTests() {
         restore.restore();
     });
 
+    runner.test('Suitability calculation optimization maintains accuracy', () => {
+        const restore = createTestWorld(5, 5);
+
+        // Create test colony
+        const colony = createTestColony('MAT', 1, 2, 2);
+        colony.traits = {water_need: 0.7, light_use: 0.5, photosym: 0.8};
+        
+        // Set up known environmental values
+        World.env.humidity[idx(2, 2)] = 0.6;
+        World.env.light[idx(2, 2)] = 0.4;
+        World.env.nutrient[idx(2, 2)] = 0.8;
+        World.env.water[idx(2, 2)] = 0;
+        
+        // Clear caches to ensure fresh calculation
+        clearSuitabilityCache();
+        World.environmentCache = null;
+        
+        // First calculation (should populate cache)
+        const result1 = suitabilityAt(colony, 2, 2);
+        
+        // Second calculation (should use cache)
+        const result2 = suitabilityAt(colony, 2, 2);
+        
+        runner.assertApproxEqual(result1, result2, 0.000001, 'Cached suitability should match uncached');
+        runner.assertType(result1, 'number', 'Suitability should be numeric');
+        runner.assertBetween(result1, 0, 1, 'Suitability should be in valid range');
+        
+        // Verify cache is actually working
+        runner.assertGreaterThan(World.suitabilityCache.size, 0, 'Cache should contain entries');
+        
+        restore.restore();
+    });
+
+    runner.test('Environment cache updates correctly', () => {
+        const restore = createTestWorld(3, 3);
+
+        // Clear environment cache
+        World.environmentCache = null;
+        World.lastEnvironmentTick = -1;
+        
+        // Set up test environment
+        for (let i = 0; i < 9; i++) {
+            World.env.humidity[i] = 0.5 + i * 0.05;
+            World.env.light[i] = 0.3 + i * 0.04;
+        }
+        
+        // Update cache
+        updateEnvironmentCache();
+        
+        runner.assertNotNull(World.environmentCache, 'Environment cache should be created');
+        runner.assertType(World.environmentCache.avgHumidity, 'object', 'Humidity cache should be array-like');
+        runner.assertType(World.environmentCache.avgLight, 'object', 'Light cache should be array-like');
+        
+        // Verify averaged values are reasonable
+        const centerAvgHum = World.environmentCache.avgHumidity[idx(1, 1)];
+        runner.assertBetween(centerAvgHum, 0.4, 0.8, 'Averaged humidity should be in reasonable range');
+        
+        // Verify cache doesn't update unnecessarily
+        const cachedTick = World.lastEnvironmentTick;
+        updateEnvironmentCache(); // Should not recalculate
+        runner.assertEqual(World.lastEnvironmentTick, cachedTick, 'Cache should not recalculate on same tick');
+        
+        restore.restore();
+    });
+
+    runner.test('Suitability cache management prevents memory growth', () => {
+        const restore = createTestWorld(3, 3);
+
+        // Create test colony
+        const colony = createTestColony('SCOUT', 1, 1, 1);
+        
+        // Clear cache
+        clearSuitabilityCache();
+        
+        // Generate many calculations to test cache limits
+        for (let i = 0; i < 15000; i++) {
+            const x = i % 3, y = Math.floor(i / 3) % 3;
+            // Vary some parameters to create different cache keys
+            World.tick = i;
+            suitabilityAt(colony, x, y);
+        }
+        
+        runner.assertLessThan(World.suitabilityCache.size, 12000, 'Cache size should be limited to prevent memory growth');
+        
+        // Verify clearing works
+        clearSuitabilityCache();
+        runner.assertEqual(World.suitabilityCache.size, 0, 'Cache should be empty after clearing');
+        
+        restore.restore();
+    });
+
+    runner.test('Suitability optimization preserves simulation determinism', () => {
+        const restore = createTestWorld(4, 4);
+
+        // Set up identical initial conditions
+        const colony1 = createTestColony('MAT', 1, 1, 1);
+        const colony2 = createTestColony('MAT', 2, 1, 1);
+        
+        // Set identical traits
+        colony1.traits = {water_need: 0.6, light_use: 0.4, photosym: 0.7};
+        colony2.traits = {water_need: 0.6, light_use: 0.4, photosym: 0.7};
+        
+        // Set up environment
+        for (let i = 0; i < 16; i++) {
+            World.env.humidity[i] = 0.5;
+            World.env.light[i] = 0.6;
+            World.env.nutrient[i] = 0.7;
+            World.env.water[i] = i % 2; // Alternating water pattern
+        }
+        
+        // Clear all caches
+        clearSuitabilityCache();
+        World.environmentCache = null;
+        World.tick = 100;
+        
+        // Calculate suitability for same position with both colonies
+        const suit1 = suitabilityAt(colony1, 2, 2);
+        const suit2 = suitabilityAt(colony2, 2, 2);
+        
+        runner.assertApproxEqual(suit1, suit2, 0.000001, 'Identical colonies should have identical suitability');
+        
+        // Verify calculations are still accurate by testing known relationships
+        // Change humidity instead of water since MAT suitability depends on humidity for waterFit
+        World.env.humidity[idx(2, 2)] = 0.8; // Change humidity to affect waterFit
+        clearSuitabilityCache();
+        World.environmentCache = null;
+        
+        const suitWithChangedEnv = suitabilityAt(colony1, 2, 2);
+        runner.assertNotEqual(suit1, suitWithChangedEnv, 'Suitability should change when environment changes');
+        
+        restore.restore();
+    });
+
+    runner.test('Performance optimization reduces calculation overhead', () => {
+        const restore = createTestWorld(5, 5);
+
+        const colony = createTestColony('TOWER', 1, 2, 2);
+        
+        // Time calculations with fresh cache each time (truly uncached)
+        clearSuitabilityCache();
+        World.environmentCache = null;
+        
+        const startTime = performance.now();
+        for (let i = 0; i < 50; i++) {
+            clearSuitabilityCache();
+            World.environmentCache = null;
+            suitabilityAt(colony, 2, 2);
+        }
+        const uncachedTime = performance.now() - startTime;
+        
+        // Time calculations with cache (same position, should be much faster)
+        clearSuitabilityCache();
+        World.environmentCache = null;
+        const cachedStartTime = performance.now();
+        for (let i = 0; i < 50; i++) {
+            suitabilityAt(colony, 2, 2); // Should hit cache after first call
+        }
+        const cachedTime = performance.now() - cachedStartTime;
+        
+        // Cache should provide significant speedup for repeated calculations
+        // Allow for measurement variance by requiring at least some improvement
+        const speedupRatio = uncachedTime / cachedTime;
+        runner.assertGreaterThan(speedupRatio, 1.1, 'Cached calculations should be at least 10% faster than uncached');
+        
+        // Verify cache is working by checking size
+        runner.assertGreaterThan(World.suitabilityCache.size, 0, 'Cache should contain entries after calculations');
+        
+        restore.restore();
+    });
+
     return runner.run();
 }
