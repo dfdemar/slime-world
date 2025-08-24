@@ -114,7 +114,12 @@ function updateInspector(c) {
         <div class="btn-group" style="margin-top: 8px;">
             <button id="btnKillColony" class="btn-danger" title="Kill this colony">Kill</button>
             <button id="btnSplitColony" class="btn-primary" title="Split this colony in two">Split</button>
-            <button id="btnRandomizeColony" title="Randomize color and pattern">🎨 Randomize</button>
+            <div style="position: relative; flex: 1; display: flex;">
+                <button id="btnChangeColor" title="Change colony color" style="flex: 1;">🎨 Color</button>
+                <input type="color" id="colorPicker" 
+                       style="position: absolute; top: 100%; left: 0; opacity: 0; pointer-events: none;" 
+                       value="${hslToHex(c.color)}">
+            </div>
         </div>
     `;
     actions.style.display = 'block';
@@ -122,7 +127,12 @@ function updateInspector(c) {
     // Add event listeners for action buttons
     document.getElementById('btnKillColony').onclick = () => killColony(c.id);
     document.getElementById('btnSplitColony').onclick = () => splitColony(c.id);
-    document.getElementById('btnRandomizeColony').onclick = () => randomizeColonyAppearance(c.id);
+    document.getElementById('btnChangeColor').onclick = () => showColorPicker(c.id);
+    
+    // Add color picker event listeners for real-time updates
+    const colorPicker = document.getElementById('colorPicker');
+    colorPicker.onchange = () => changeColonyColor(c.id, colorPicker.value, true); // Show notification on final change
+    colorPicker.oninput = () => changeColonyColor(c.id, colorPicker.value, false); // No notification during real-time updates
     
     // Render tile preview
     renderTilePreview(c);
@@ -395,21 +405,65 @@ function splitColony(colonyId) {
     notify(`${parentColony.name} split into parent (#${parentColony.id}) and child (#${childColony.id})`, 'good', 2000);
 }
 
-function randomizeColonyAppearance(colonyId) {
+function showColorPicker(colonyId) {
+    const colorPicker = document.getElementById('colorPicker');
+    if (!colorPicker) return;
+    
+    // Make the color picker visible and clickable, positioned below the button
+    colorPicker.style.opacity = '1';
+    colorPicker.style.pointerEvents = 'auto';
+    colorPicker.style.width = '40px';
+    colorPicker.style.height = '40px';
+    colorPicker.style.border = '2px solid var(--accent)';
+    colorPicker.style.borderRadius = '4px';
+    colorPicker.style.cursor = 'pointer';
+    
+    // Trigger the color picker dialog
+    colorPicker.click();
+    
+    // Hide the picker when it loses focus or after color selection
+    setTimeout(() => {
+        const hideColorPicker = () => {
+            colorPicker.style.opacity = '0';
+            colorPicker.style.pointerEvents = 'none';
+            colorPicker.removeEventListener('blur', hideColorPicker);
+        };
+        
+        colorPicker.addEventListener('blur', hideColorPicker);
+        
+        // Also hide after a delay if user doesn't interact
+        setTimeout(hideColorPicker, 10000);
+    }, 100);
+}
+
+function changeColonyColor(colonyId, hexColor, showNotification = false) {
     const colony = World.colonies.find(c => c.id === colonyId);
     if (!colony) {
-        notify('Colony not found', 'error', 2000);
+        if (showNotification) notify('Colony not found', 'error', 2000);
         return;
     }
 
-    // Generate new color and pattern
-    colony.color = randomColorVivid();
+    // Convert hex color back to HSL format
+    colony.color = hexToHsl(hexColor);
     colony.pattern = createPatternForColony(colony);
 
-    // Update inspector to show new appearance
-    updateInspector(colony);
+    // Update inspector to show new color (but don't recreate the whole thing to avoid losing the color picker)
+    if (selectedId === colonyId) {
+        // Just update the color dot in the inspector header
+        const colorDot = document.querySelector('#inspector div[style*="background"]');
+        if (colorDot) {
+            colorDot.style.background = colony.color;
+        }
+        // Update the tile preview
+        renderTilePreview(colony);
+    }
     
-    notify('Colony appearance randomized', 'good', 1000);
+    // Trigger redraw to show the new color on the canvas
+    needRedraw = true;
+    
+    if (showNotification) {
+        notify('Colony color updated', 'good', 1000);
+    }
 }
 
 function renderTilePreview(colony) {
