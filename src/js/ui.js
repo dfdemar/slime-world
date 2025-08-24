@@ -466,6 +466,24 @@ function changeColonyColor(colonyId, hexColor, showNotification = false) {
     }
 }
 
+function randomizeColonyAppearance(colonyId) {
+    const colony = World.colonies.find(c => c.id === colonyId);
+    if (!colony) return;
+    
+    // Generate new random color
+    colony.color = `hsl(${World.rng() * 360}, 70%, 50%)`;
+    
+    // Generate new pattern
+    colony.pattern = createPatternForColony(colony);
+    
+    // Update inspector if this colony is selected
+    if (selectedId === colonyId) {
+        updateInspector(colony);
+    }
+    
+    needRedraw = true;
+}
+
 function renderTilePreview(colony) {
     const canvas = document.getElementById('tileCanvas');
     const ctx = canvas.getContext('2d');

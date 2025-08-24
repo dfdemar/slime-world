@@ -1,4 +1,13 @@
 /* ===== Colonies ===== */
+
+// Colony lifecycle states for aggregation system
+const ColonyStates = {
+    INDIVIDUAL: 'individual',      // Separate feeding cells
+    AGGREGATING: 'aggregating',    // Moving toward aggregation site
+    COLLECTIVE: 'collective',      // Coordinated multicellular mass
+    FRUITING: 'fruiting'          // Spore-producing structure
+};
+
 function randomColorVivid() {
     const h = randRange(World.rng, 0, 360);
     const s = randRange(World.rng, 70, 95);
@@ -60,7 +69,10 @@ function newColony(type, x, y, parent = null) {
         gen: parent ? (parent.gen + 1) : 0,
         parent: parent ? parent.id : null,
         kids: [],
-        lastFit: 0
+        lastFit: 0,
+        state: ColonyStates.INDIVIDUAL,  // Default to individual phase
+        stressLevel: 0,                  // Nutrient scarcity stress level
+        aggregationTarget: null          // Target coordinates for aggregation
     };
     if (parent) parent.kids.push(id);
     // per-colony pattern
@@ -94,4 +106,44 @@ function mutateTraits(traits) {
         t[k] = clamp(t[k] + randRange(World.rng, -sigma, sigma), 0, 1);
     }
     return t;
+}
+
+// Colony state transition utilities
+function canTransitionState(colony, newState) {
+    const current = colony.state;
+    const valid = {
+        [ColonyStates.INDIVIDUAL]: [ColonyStates.AGGREGATING],
+        [ColonyStates.AGGREGATING]: [ColonyStates.COLLECTIVE, ColonyStates.INDIVIDUAL],
+        [ColonyStates.COLLECTIVE]: [ColonyStates.FRUITING, ColonyStates.INDIVIDUAL],
+        [ColonyStates.FRUITING]: [ColonyStates.INDIVIDUAL]
+    };
+    return valid[current] && valid[current].includes(newState);
+}
+
+function transitionColonyState(colony, newState) {
+    if (!canTransitionState(colony, newState)) {
+        console.warn(`Invalid state transition: ${colony.state} -> ${newState} for colony ${colony.id}`);
+        return false;
+    }
+    
+    const oldState = colony.state;
+    colony.state = newState;
+    
+    // State-specific setup
+    switch (newState) {
+        case ColonyStates.INDIVIDUAL:
+            colony.aggregationTarget = null;
+            break;
+        case ColonyStates.AGGREGATING:
+            // aggregationTarget will be set by calling code
+            break;
+        case ColonyStates.COLLECTIVE:
+            colony.aggregationTarget = null;
+            break;
+        case ColonyStates.FRUITING:
+            // Fruiting bodies are stationary
+            break;
+    }
+    
+    return true;
 }

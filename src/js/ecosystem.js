@@ -347,6 +347,7 @@ function stepEcosystem() {
             }
         }
         Slime.diffuseEvaporate();
+        Signals.diffuseEvaporate();
         starvationSweep();
         nutrientDynamics();
         // Check for adaptive type pressure updates every 5 ticks

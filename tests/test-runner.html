@@ -177,6 +177,8 @@
 <script src="test-environment.js"></script>
 <script src="test-bugfixes.js"></script>
 <script src="test-ui.js"></script>
+<script src="test-signals.js"></script>
+<script src="test-colony-states.js"></script>
 
 <script>
     // Test runner UI
@@ -252,7 +254,9 @@
             {name: 'Ecosystem Tests', fn: runEcosystemTests},
             {name: 'Environment Tests', fn: runEnvironmentTests},
             {name: 'Bug Fix Tests', fn: runBugFixTests},
-            {name: 'UI Tests', fn: runUITests}
+            {name: 'UI Tests', fn: runUITests},
+            {name: 'Signal Tests', fn: runSignalTests},
+            {name: 'Colony State Tests', fn: runColonyStateTests}
         ];
 
         for (const suite of testSuites) {
