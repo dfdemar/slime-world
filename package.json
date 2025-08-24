@@ -1,0 +1,22 @@
+{
+  "name": "slimeworld-simulation",
+  "version": "2.4.0",
+  "description": "Evolution simulator modeling slime mold aggregation behavior",
+  "main": "index.html",
+  "scripts": {
+    "test": "node tests/cli-test-runner.js",
+    "test:watch": "node tests/cli-test-runner.js --watch"
+  },
+  "keywords": ["simulation", "evolution", "slime-mold", "aggregation", "html5"],
+  "author": "SlimeWorld Project",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "puppeteer": "^21.0.0"
+  },
+  "optionalDependencies": {
+    "puppeteer": "^21.0.0"
+  }
+}
