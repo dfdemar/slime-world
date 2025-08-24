@@ -43,8 +43,25 @@ function idx(x, y) {
     return y * World.W + x
 }
 
+// Boundary clamping utilities for impenetrable barriers
+function clampX(x) {
+    return Math.max(0, Math.min(x, World.W - 1));
+}
+
+function clampY(y) {
+    return Math.max(0, Math.min(y, World.H - 1));
+}
+
+function clampCoords(x, y) {
+    return [clampX(x), clampY(y)];
+}
+
+function idxClamped(x, y) {
+    return clampY(y) * World.W + clampX(x);
+}
+
 function inBounds(x, y) {
-    return x >= 0 && y >= 0 && x < World.W && y < World.H
+    return x >= 0 && x < World.W && y >= 0 && y < World.H;
 }
 
 function setupWorld(seed, sizeStr) {
@@ -64,10 +81,25 @@ function setupWorld(seed, sizeStr) {
     const noise = ValueNoise(seed);
     World.rng = noise.r;
     World.field = noise;
+    
+    // Add RNG state management utilities
+    World.getRNGState = function() {
+        return World.rng && World.rng.getState ? World.rng.getState() : null;
+    };
+    
+    World.setRNGState = function(state) {
+        if (World.rng && World.rng.setState && state) {
+            World.rng.setState(state);
+        }
+    };
     Slime.trail = new Float32Array(W * H);
     Slime.trailNext = new Float32Array(W * H);
     buildEnvironment();
     seedInitialColonies();
-    updateTypePressure();
+    updateTypePressure(true); // Force initial calculation
+    // Initialize suitability optimization caches
+    if (!World.suitabilityCache) World.suitabilityCache = new Map();
+    World.environmentCache = null;
+    World.lastEnvironmentTick = -1;
     refreshLiveStats();
 }

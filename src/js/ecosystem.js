@@ -3,7 +3,12 @@
 // Energy calculation constants
 window.NON_PHOTOSYNTHETIC_BONUS = 0.5; // Bonus nutrient efficiency for non-photosynthetic archetypes
 const NON_PHOTOSYNTHETIC_BONUS = window.NON_PHOTOSYNTHETIC_BONUS;
-function updateTypePressure() {
+
+// Track population changes for adaptive pressure updates
+World.lastTypeCounts = null;
+World.lastPressureUpdate = 0;
+
+function updateTypePressure(force = false) {
     const counts = {MAT: 0, CORD: 0, TOWER: 0, FLOAT: 0, EAT: 0, SCOUT: 0};
     const idToType = new Map();
     for (const c of World.colonies) {
@@ -19,6 +24,32 @@ function updateTypePressure() {
             counts[t] = (counts[t] || 0) + 1;
         }
     }
+    
+    // Check if significant population changes occurred
+    let significantChange = force;
+    if (World.lastTypeCounts && !force) {
+        const totalNow = Math.max(1, filled);
+        const totalLast = Math.max(1, Object.values(World.lastTypeCounts).reduce((a, b) => a + b, 0));
+        
+        for (const t of Object.keys(Archetypes)) {
+            const shareNow = (counts[t] || 0) / totalNow;
+            const shareLast = (World.lastTypeCounts[t] || 0) / totalLast;
+            const changeMagnitude = Math.abs(shareNow - shareLast);
+            
+            // Trigger update if any type changes by more than 15% of population share
+            if (changeMagnitude > 0.15) {
+                significantChange = true;
+                break;
+            }
+        }
+    }
+    
+    // Only update if significant change detected or enough time passed
+    const timeSinceUpdate = World.tick - World.lastPressureUpdate;
+    if (!significantChange && timeSinceUpdate < 30) {
+        return; // Skip update
+    }
+    
     const total = Math.max(1, filled);
     World.typePressure = {};
     for (const t of Object.keys(Archetypes)) {
@@ -26,6 +57,10 @@ function updateTypePressure() {
         const pressure = clamp(1 - 0.7 * share, 0.55, 1.0);
         World.typePressure[t] = pressure;
     }
+    
+    // Store current counts and update time for next comparison
+    World.lastTypeCounts = {...counts};
+    World.lastPressureUpdate = World.tick;
 }
 
 function starvationSweep() {
@@ -84,51 +119,127 @@ function nutrientDynamics() {
 }
 
 /* ===== Suitability & Growth ===== */
-function suitabilityAt(col, x, y) {
-    const {humidity, light, nutrient, water} = World.env;
-    const i = idx(x, y);
 
-    function s(field) {
-        let sum = field[i];
-        let count = 1;
-        if (inBounds(x - 1, y)) {
-            sum += field[idx(x - 1, y)];
-            count++;
-        }
-        if (inBounds(x + 1, y)) {
-            sum += field[idx(x + 1, y)];
-            count++;
-        }
-        if (inBounds(x, y - 1)) {
-            sum += field[idx(x, y - 1)];
-            count++;
-        }
-        if (inBounds(x, y + 1)) {
-            sum += field[idx(x, y + 1)];
-            count++;
-        }
-        return sum / count;
+// Suitability calculation optimization
+World.suitabilityCache = new Map();
+World.environmentCache = null;
+World.lastEnvironmentTick = -1;
+
+function updateEnvironmentCache() {
+    if (World.lastEnvironmentTick === World.tick && World.environmentCache) {
+        return; // Cache is still valid
     }
+    
+    // If cache was manually cleared, force update
+    if (!World.environmentCache) {
+        World.lastEnvironmentTick = -1;
+    }
+    
+    const {humidity, light, nutrient, water} = World.env;
+    const {W, H} = World;
+    
+    // Pre-calculate averaged environmental fields for all positions
+    World.environmentCache = {
+        avgHumidity: new Float32Array(W * H),
+        avgLight: new Float32Array(W * H),
+        nutrient: nutrient, // Direct reference, no averaging needed
+        water: water // Direct reference, no averaging needed
+    };
+    
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = idx(x, y);
+            
+            // Calculate averaged humidity (center + valid neighbors only)
+            let humSum = humidity[i];
+            let humCount = 1;
+            if (inBounds(x - 1, y)) { humSum += humidity[idx(x - 1, y)]; humCount++; }
+            if (inBounds(x + 1, y)) { humSum += humidity[idx(x + 1, y)]; humCount++; }
+            if (inBounds(x, y - 1)) { humSum += humidity[idx(x, y - 1)]; humCount++; }
+            if (inBounds(x, y + 1)) { humSum += humidity[idx(x, y + 1)]; humCount++; }
+            World.environmentCache.avgHumidity[i] = humSum / humCount;
+            
+            // Calculate averaged light (center + valid neighbors only)
+            let lightSum = light[i];
+            let lightCount = 1;
+            if (inBounds(x - 1, y)) { lightSum += light[idx(x - 1, y)]; lightCount++; }
+            if (inBounds(x + 1, y)) { lightSum += light[idx(x + 1, y)]; lightCount++; }
+            if (inBounds(x, y - 1)) { lightSum += light[idx(x, y - 1)]; lightCount++; }
+            if (inBounds(x, y + 1)) { lightSum += light[idx(x, y + 1)]; lightCount++; }
+            World.environmentCache.avgLight[i] = lightSum / lightCount;
+        }
+    }
+    
+    World.lastEnvironmentTick = World.tick;
+}
 
-    const h = s(humidity), l = s(light), n = nutrient[i], w = water[i];
+function clearSuitabilityCache() {
+    World.suitabilityCache.clear();
+}
+
+function suitabilityAt(col, x, y) {
+    const i = idx(x, y);
+    
+    // Create cache key based on position, colony type, and changing factors
+    // Don't include tick for performance - cache within same tick
+    const envHash = Math.round((World.env.humidity[i] + World.env.light[i] + World.env.nutrient[i] + World.env.water[i]) * 1000);
+    const trailValue = Math.round(Slime.trail[i] * 100);
+    const densityValue = Math.round(World.biomass[i] * 100);
+    const pressureValue = Math.round((World.typePressure[col.type] ?? 1) * 1000);
+    const cacheKey = `${x},${y},${col.type},${pressureValue},${densityValue},${envHash},${trailValue}`;
+    
+    // Check cache first
+    if (World.suitabilityCache.has(cacheKey)) {
+        return World.suitabilityCache.get(cacheKey);
+    }
+    
+    // Update environment cache if needed
+    updateEnvironmentCache();
+    
+    // Use pre-calculated environmental averages with validation
+    const h = clamp(World.environmentCache.avgHumidity[i] || 0, 0, 1);
+    const l = clamp(World.environmentCache.avgLight[i] || 0, 0, 1);
+    const n = clamp(World.environmentCache.nutrient[i] || 0, 0, 1);
+    const w = World.environmentCache.water[i] || 0;
+    
     const T = col.traits;
     const B = TypeBehavior[col.type] || TypeBehavior.MAT;
-    const waterFit = 1.0 - Math.abs(h - T.water_need);
-    const lightFit = T.photosym > 0 ? (0.55 * (1.0 - Math.abs(l - T.light_use)) + 0.45 * T.photosym * l) : (1.0 - 0.6 * l);
+    
+    // Validate trait values to prevent NaN
+    const waterNeed = clamp(T.water_need || 0.5, 0, 1);
+    const lightUse = clamp(T.light_use || 0.5, 0, 1);
+    const photosym = clamp(T.photosym || 0, 0, 1);
+    
+    const waterFit = 1.0 - Math.abs(h - waterNeed);
+    const lightFit = photosym > 0 ? (0.55 * (1.0 - Math.abs(l - lightUse)) + 0.45 * photosym * l) : (1.0 - 0.6 * l);
     const trSat = Slime.sat(Slime.trail[i]);
     const denom = Math.max(1e-6, (B.nutrientW || 0) + (B.trailW || 0));
     const chemo = ((B.nutrientW || 0) * n + (B.trailW || 0) * trSat) / denom;
-    // Bonuses/penalties
+    
+    // Bonuses/penalties with validation
     let raftBonus = (col.type === 'FLOAT') ? (w ? 0.25 : -0.08) : 0;
     raftBonus += (B.waterAffinity && w) ? B.waterAffinity : 0;
     let towerPenalty = (col.type === 'TOWER' && w) ? -0.12 : 0;
+    
     const base = clamp(0.06 * waterFit + 0.06 * lightFit + 0.88 * chemo + raftBonus + towerPenalty, 0, 1);
-    // Capacity pressure
-    const cap = World.capacity;
-    const density = World.biomass[i];
+    
+    // Capacity pressure with validation
+    const cap = Math.max(0.1, World.capacity || 1.0);
+    const density = Math.max(0, World.biomass[i] || 0);
     const capPenalty = -0.35 * clamp((density - cap), 0, 1);
-    const pressure = World.typePressure[col.type] ?? 1;
-    return clamp(base * pressure + capPenalty, 0, 1);
+    const pressure = clamp(World.typePressure[col.type] ?? 1, 0.1, 1.5);
+    
+    const result = clamp(base * pressure + capPenalty, 0, 1);
+    
+    // Validate final result
+    const validResult = (isNaN(result) || !isFinite(result)) ? 0 : result;
+    
+    // Cache the result but limit cache size to prevent memory issues
+    if (World.suitabilityCache.size < 10000) {
+        World.suitabilityCache.set(cacheKey, validResult);
+    }
+    
+    return validResult;
 }
 
 function tryExpand(col) {
@@ -139,12 +250,12 @@ function tryExpand(col) {
     for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
             const x = cx + dx, y = cy + dy;
-            if (!inBounds(x, y)) continue;
+            if (!inBounds(x, y)) continue; // Skip out-of-bounds positions
             const i = idx(x, y);
             if (World.tiles[i] !== col.id) continue;
             for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
                 const nx = x + sx, ny = y + sy;
-                if (!inBounds(nx, ny)) continue;
+                if (!inBounds(nx, ny)) continue; // Skip expansion beyond boundaries
                 const j = idx(nx, ny);
                 const foe = World.tiles[j];
                 const s = suitabilityAt(col, nx, ny);
@@ -199,7 +310,7 @@ function stepEcosystem() {
                 const c = cols[(k + (World.tick % cols.length)) % cols.length];
                 if (!c) continue;
                 c.age++;
-                c.lastFit = suitabilityAt(c, clamp(Math.round(c.x), 0, World.W - 1), clamp(Math.round(c.y), 0, World.H - 1));
+                c.lastFit = suitabilityAt(c, clampX(Math.round(c.x)), clampY(Math.round(c.y)));
                 if (!tryExpand(c)) {
                     const decay = (c.lastFit < 0.4) ? 0.985 : 0.992;
                     c.biomass *= decay;
@@ -208,10 +319,10 @@ function stepEcosystem() {
                 }
                 const pressure = World.typePressure[c.type] ?? 1;
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
-                if (c.biomass > 0.8 && c.lastFit > 0.55 && Math.random() < spawnP) {
+                if (c.biomass > 0.8 && c.lastFit > 0.55 && World.rng() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
-                    const bx = clamp(Math.round(c.x + dir[0] * 2), 0, World.W - 1);
-                    const by = clamp(Math.round(c.y + dir[1] * 2), 0, World.H - 1);
+                    const bx = clampX(Math.round(c.x + dir[0] * 2));
+                    const by = clampY(Math.round(c.y + dir[1] * 2));
                     const child = {...c};
                     child.id = World.nextId++;
                     child.parent = c.id;
@@ -238,9 +349,18 @@ function stepEcosystem() {
         Slime.diffuseEvaporate();
         starvationSweep();
         nutrientDynamics();
-        if (World.tick % 30 === 0) updateTypePressure();
+        // Check for adaptive type pressure updates every 5 ticks
+        if (World.tick % 5 === 0) updateTypePressure();
+        // Clear suitability cache periodically to prevent memory growth and ensure fresh calculations
+        if (World.tick % 30 === 0) clearSuitabilityCache();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
+            // Clean up patterns before removing colonies
+            for (const colony of World.colonies) {
+                if (!alive.has(colony.id)) {
+                    cleanupColonyPattern(colony);
+                }
+            }
             World.colonies = World.colonies.filter(c => alive.has(c.id));
         }
     }

@@ -65,7 +65,7 @@ function createUnifiedColony(type, x, y, parent = null) {
             modularColony.pattern = createPatternForColony(modularColony);
             World.colonies.push(modularColony);
 
-            const X = clamp(x, 0, World.W - 1), Y = clamp(y, 0, World.H - 1);
+            const X = clampX(x), Y = clampY(y);
             const i = idx(X, Y);
             World.tiles[i] = modularColony.id;
             World.biomass[i] = Math.max(World.biomass[i] || 0, 0.4);
@@ -275,8 +275,8 @@ function stepUnifiedEcosystem() {
                 c.age++;
 
                 // Use unified suitability calculation
-                const clampedX = clamp(Math.round(c.x), 0, World.W - 1);
-                const clampedY = clamp(Math.round(c.y), 0, World.H - 1);
+                const clampedX = clampX(Math.round(c.x));
+                const clampedY = clampY(Math.round(c.y));
                 c.lastFit = calculateUnifiedSuitability(c, clampedX, clampedY);
 
                 // Try expansion
@@ -291,10 +291,10 @@ function stepUnifiedEcosystem() {
                 const pressure = World.typePressure[c.type] ?? 1;
                 const spawnP = (0.003 + 0.008 * World.mutationRate) * pressure;
 
-                if (c.biomass > 0.8 && c.lastFit > 0.55 && Math.random() < spawnP) {
+                if (c.biomass > 0.8 && c.lastFit > 0.55 && World.rng() < spawnP) {
                     const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(World.rng() * 4)];
-                    const bx = clamp(Math.round(c.x + dir[0] * 2), 0, World.W - 1);
-                    const by = clamp(Math.round(c.y + dir[1] * 2), 0, World.H - 1);
+                    const bx = clampX(Math.round(c.x + dir[0] * 2));
+                    const by = clampY(Math.round(c.y + dir[1] * 2));
 
                     const child = createUnifiedColony(c.type, bx, by, c);
                     if (child) {
@@ -318,9 +318,18 @@ function stepUnifiedEcosystem() {
         starvationSweep();
         nutrientDynamics();
 
-        if (World.tick % 30 === 0) updateTypePressure();
+        // Check for adaptive type pressure updates every 5 ticks
+        if (World.tick % 5 === 0) updateTypePressure();
+        // Clear suitability cache periodically to prevent memory growth and ensure fresh calculations
+        if (World.tick % 30 === 0) clearSuitabilityCache();
         if (World.tick % 60 === 0) {
             const alive = new Set(World.tiles);
+            // Clean up patterns before removing colonies
+            for (const colony of World.colonies) {
+                if (!alive.has(colony.id)) {
+                    cleanupColonyPattern(colony);
+                }
+            }
             World.colonies = World.colonies.filter(c => alive.has(c.id));
         }
     }
