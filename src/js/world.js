@@ -8,6 +8,12 @@ const World = {
     tick: 0, paused: false, speed: 1.2,
     mutationRate: 0.18, capacity: 1.0,
     hover: {x: -1, y: -1}, typePressure: {},
+    signals: {
+        stress: null,
+        aggregation: null,
+        stressBuf: null,
+        aggregationBuf: null
+    },
 };
 
 const Slime = {
@@ -36,6 +42,63 @@ const Slime = {
         // swap buffers
         this.trail = N;
         this.trailNext = T;
+    },
+};
+
+const Signals = {
+    params: {evap: 0.98, diff: 0.25, stressScale: 0.02, aggregationScale: 0.035},
+    clear() {
+        if (World.signals.stress && World.signals.aggregation) {
+            World.signals.stress.fill(0);
+            World.signals.aggregation.fill(0);
+        }
+    },
+    satStress(v) {
+        return 1 - Math.exp(-this.params.stressScale * v);
+    },
+    satAggregation(v) {
+        return 1 - Math.exp(-this.params.aggregationScale * v);
+    },
+    diffuseEvaporate() {
+        // Skip if signals not initialized yet
+        if (!World.signals.stress || !World.signals.aggregation || !World.signals.stressBuf || !World.signals.aggregationBuf) {
+            return;
+        }
+        
+        const {evap, diff} = this.params;
+        const W = World.W, H = World.H;
+        
+        // Stress signals diffusion
+        const stress = World.signals.stress, stressBuf = World.signals.stressBuf;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const i = y * W + x;
+                const l = stress[y * W + ((x - 1 + W) % W)] || 0, r = stress[y * W + ((x + 1) % W)] || 0,
+                    u = stress[((y - 1 + H) % H) * W + x] || 0, d = stress[((y + 1) % H) * W + x] || 0;
+                const self = stress[i] || 0;
+                const mixed = (1 - diff) * self + (diff * 0.25) * (l + r + u + d);
+                stressBuf[i] = mixed * evap;
+            }
+        }
+        
+        // Aggregation signals diffusion
+        const aggregation = World.signals.aggregation, aggregationBuf = World.signals.aggregationBuf;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const i = y * W + x;
+                const l = aggregation[y * W + ((x - 1 + W) % W)] || 0, r = aggregation[y * W + ((x + 1) % W)] || 0,
+                    u = aggregation[((y - 1 + H) % H) * W + x] || 0, d = aggregation[((y + 1) % H) * W + x] || 0;
+                const self = aggregation[i] || 0;
+                const mixed = (1 - diff) * self + (diff * 0.25) * (l + r + u + d);
+                aggregationBuf[i] = mixed * evap;
+            }
+        }
+        
+        // Swap buffers
+        World.signals.stress = stressBuf;
+        World.signals.stressBuf = stress;
+        World.signals.aggregation = aggregationBuf;
+        World.signals.aggregationBuf = aggregation;
     },
 };
 
@@ -94,6 +157,13 @@ function setupWorld(seed, sizeStr) {
     };
     Slime.trail = new Float32Array(W * H);
     Slime.trailNext = new Float32Array(W * H);
+    
+    // Initialize chemical signaling system
+    World.signals.stress = new Float32Array(W * H);
+    World.signals.aggregation = new Float32Array(W * H);
+    World.signals.stressBuf = new Float32Array(W * H);
+    World.signals.aggregationBuf = new Float32Array(W * H);
+    
     buildEnvironment();
     seedInitialColonies();
     updateTypePressure(true); // Force initial calculation
