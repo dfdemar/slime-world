@@ -169,4 +169,10 @@ const canvasData = await page.evaluate(() => {
 - **CI/CD Integration**: Separate test suites for different pipeline stages
 - **Development Workflow**: Watch mode for rapid unit test feedback
 
-This approach provides comprehensive test coverage while leveraging real browser capabilities and maintaining development efficiency through strategic test organization.
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less
+**NEVER** use mocks or simulated behavior in tests
+**NEVER** rewrite tests using mocks to get them to pass
+**ALWAYS** test actual behavior
+**ALWAYS** run the tests after writing them
+**NEVER** assume that a test failure is irrelevant or unrelated to your changes
