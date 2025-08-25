@@ -1,5 +1,39 @@
 // Global Jest setup for SlimeWorld tests
 
+// ASCII Banner for SlimeWorld Tests (show once across all processes)
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const bannerFlagPath = path.join(os.tmpdir(), '.slimeworld-test-banner');
+
+if (!fs.existsSync(bannerFlagPath)) {
+  try {
+    fs.writeFileSync(bannerFlagPath, 'shown');
+    console.log(`
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║   ███████╗██╗     ██╗███╗   ███╗███████╗██╗    ██╗ ██████╗    ║
+║   ██╔════╝██║     ██║████╗ ████║██╔════╝██║    ██║██╔═══██╗   ║
+║   ███████╗██║     ██║██╔████╔██║█████╗  ██║ █╗ ██║██║   ██║   ║
+║   ╚════██║██║     ██║██║╚██╔╝██║██╔══╝  ██║███╗██║██║   ██║   ║
+║   ███████║███████╗██║██║ ╚═╝ ██║███████╗╚███╔███╔╝╚██████╔╝   ║
+║   ╚══════╝╚══════╝╚═╝╚═╝     ╚═╝╚══════╝ ╚══╝╚══╝  ╚═════╝    ║
+║                                                               ║
+║                     Test Suite v2.4.0                         ║
+║                       Jest Framework                          ║
+╚═══════════════════════════════════════════════════════════════╝
+`);
+
+    // Clean up the flag file after a short delay
+    setTimeout(() => {
+      try { fs.unlinkSync(bannerFlagPath); } catch {}
+    }, 100);
+  } catch {
+    // If file creation fails (race condition), skip banner
+  }
+}
+
 // Extend Jest matchers
 expect.extend({
   toBeWithinRange(received, floor, ceiling) {
