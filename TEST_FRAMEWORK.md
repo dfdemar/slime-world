@@ -11,34 +11,36 @@ This document outlines the implementation plan for adding Jest tests to the Slim
 - **Architecture**: Modular JavaScript files in `src/js/` with clear separation of concerns
 - **Existing Tests**: Browser-based tests in `tests/` directory will remain unchanged
 
-## Proposed Jest Test Structure
+## Current Jest Test Structure
 
 ```
-src/tests/
-├── jest.config.js              # Jest configuration
-├── setup/
-│   ├── jest.setup.js          # Global Jest setup
-│   └── puppeteer.config.js    # Puppeteer configuration
-├── unit/
-│   ├── utils.test.js          # PRNG, helpers, noise generation
-│   ├── world.test.js          # World system and slime mechanics
-│   ├── colonies.test.js       # Colony management and expansion
-│   ├── archetypes.test.js     # Legacy archetype definitions
-│   ├── trait-system.test.js   # Modular trait framework
-│   ├── extended-archetypes.test.js # Specialized archetype classes
-│   ├── environment.test.js    # Procedural world generation
-│   ├── ecosystem.test.js      # Balance, starvation, growth
-│   ├── integration.test.js    # Legacy/modular compatibility
-│   └── diagnostics.test.js    # Testing and debugging functions
-├── browser/
-│   ├── simulation.test.js     # Full simulation browser tests
-│   ├── rendering.test.js      # Canvas rendering with real browser
-│   ├── ui-interaction.test.js # UI component interactions
-│   └── performance.test.js    # Performance benchmarking
-└── fixtures/
-    ├── test-worlds.js         # Sample world states for testing
-    ├── test-colonies.js       # Sample colony configurations
-    └── test-data.js           # Reusable test data
+/
+├── jest.config.js              # Main Jest configuration (multi-project)
+├── jest-puppeteer.config.js    # Puppeteer-specific configuration
+└── src/tests/
+    ├── setup/
+    │   ├── jest.setup.js          # Global Jest setup and utilities
+    │   └── puppeteer.config.js    # Puppeteer launch configuration
+    ├── unit/
+    │   ├── setup.test.js          # ✅ Jest setup verification tests
+    │   ├── utils.test.js          # PRNG, helpers, noise generation
+    │   ├── world.test.js          # World system and slime mechanics
+    │   ├── colonies.test.js       # Colony management and expansion
+    │   ├── archetypes.test.js     # Legacy archetype definitions
+    │   ├── trait-system.test.js   # Modular trait framework
+    │   ├── extended-archetypes.test.js # Specialized archetype classes
+    │   ├── environment.test.js    # Procedural world generation
+    │   ├── ecosystem.test.js      # Balance, starvation, growth
+    │   ├── integration.test.js    # Legacy/modular compatibility
+    │   └── diagnostics.test.js    # Testing and debugging functions
+    ├── browser/
+    │   ├── setup.test.js          # ✅ Puppeteer setup verification tests
+    │   ├── simulation.test.js     # Full simulation browser tests
+    │   ├── rendering.test.js      # Canvas rendering with real browser
+    │   ├── ui-interaction.test.js # UI component interactions
+    │   └── performance.test.js    # Performance benchmarking
+    └── fixtures/
+        └── test-data.js           # ✅ Reusable test data and utilities
 ```
 
 ## Test Coverage Priorities
@@ -67,12 +69,12 @@ src/tests/
 
 ## Jest Configuration Strategy
 
-### jest.config.js
-- **Environment**: Node.js for unit tests, Puppeteer for browser tests
-- **Test Pattern Matching**: Separate unit and browser test execution
-- **Coverage Configuration**: 80% threshold for core systems
-- **Setup Files**: Global Jest setup and Puppeteer configuration
-- **Timeout Settings**: Extended timeouts for browser tests
+### jest.config.js (Root Configuration)
+- **Multi-Project Setup**: Separate environments for unit and browser tests
+- **Unit Tests**: Node.js environment for pure JavaScript testing
+- **Browser Tests**: jest-puppeteer preset for real browser testing
+- **Coverage Configuration**: 70% threshold for core systems (disabled initially)
+- **Timeout Settings**: 30 second timeout for browser operations
 
 ### Puppeteer Integration
 - **Headless Browser**: Chrome/Chromium for real browser environment
@@ -92,11 +94,14 @@ src/tests/
 
 ## Implementation Strategy
 
-### Phase 1: Infrastructure Setup
-- Configure Jest for dual environments (Node.js + Puppeteer)
-- Set up Puppeteer browser automation
-- Create test fixtures and utilities
-- Establish CI/CD integration patterns
+### ✅ Phase 1: Infrastructure Setup (COMPLETE)
+- ✅ Configure Jest for dual environments (Node.js + Puppeteer)  
+- ✅ Set up Puppeteer browser automation with real Chrome
+- ✅ Create test fixtures and utilities (`test-data.js`)
+- ✅ Establish working test pipeline with 11 passing tests
+- ✅ Consolidate to single root Jest configuration
+
+**Status**: All 11 tests passing (6 unit + 5 browser tests)
 
 ### Phase 2: Core Unit Tests
 - **utils.test.js**: PRNG, mathematical functions, utilities

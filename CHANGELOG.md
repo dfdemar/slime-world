@@ -7,8 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Jest Test Framework**: Complete Jest testing infrastructure with dual-environment setup
+  - Unit tests in Node.js environment for pure JavaScript testing
+  - Browser tests using Puppeteer for real Chrome browser testing without mocking
+  - Custom Jest matchers (`toBeWithinRange`, `toBeValidColony`) for simulation-specific assertions
+  - Test fixtures and utilities (`TestData`, `TestUtils`) for reproducible test scenarios
+  - Real browser testing with actual Canvas APIs and simulation modules
+- **Test Infrastructure Documentation**: Comprehensive `TEST_FRAMEWORK.md` with implementation plan and testing strategy
 
 ### Changed
+- **Jest Configuration**: Consolidated Jest configuration from dual files to single root `jest.config.js` for better maintainability
+- **Puppeteer Integration**: Updated to new headless mode to eliminate deprecation warnings
 
 ### Fixed
 
