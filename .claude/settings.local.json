@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(node:*)",
+      "Bash(start index.html)",
+      "Bash(grep:*)",
+      "Bash(start tests/test-runner.html)",
+      "Bash(start validate-ui.html)",
+      "WebFetch(domain:localhost)",
+      "Bash(start validate-fix.html)",
+      "WebFetch(domain:127.0.0.1)",
+      "Bash(start D:/Code/slimeworld/tests/test-runner.html)",
+      "Bash(start D:/Code/slimeworld/test-debug.html)",
+      "Bash(start D:/Code/slimeworld/simple-test.html)",
+      "Bash(start:*)",
+      "Bash(npm install)",
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(timeout 30 npm test)",
+      "Bash(timeout 20 npm test)",
+      "Bash(npm install:*)",
+      "Bash(npm run test:jest:*)",
+      "Bash(jest)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
