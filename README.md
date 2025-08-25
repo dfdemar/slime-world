@@ -1,8 +1,8 @@
-# Slimeworld Evolution Simulator
+# slimeworld
 
 A sophisticated ecosystem simulation inspired by slime mold behavior, featuring emergent evolution, competitive dynamics, and adaptive traits. Watch colonies of different archetypes compete, cooperate, and evolve in a dynamic environment with realistic resource constraints.
 
-![Version](https://img.shields.io/badge/version-2.4-blue)
+![Version](https://img.shields.io/badge/version-2.6-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![HTML5](https://img.shields.io/badge/HTML5-Canvas-orange)
 

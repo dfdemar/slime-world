@@ -1,7 +1,7 @@
 {
-  "name": "slimeworld-simulation",
+  "name": "slimeworld",
   "version": "2.4.0",
-  "description": "Evolution simulator modeling slime mold aggregation behavior",
+  "description": "Evolution simulator modeling slime mold behavior",
   "main": "index.html",
   "scripts": {
     "test": "node tests/cli-test-runner.js",
