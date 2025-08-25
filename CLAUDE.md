@@ -263,11 +263,14 @@ Enhanced fitness evaluation using:
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
+**ALWAYS** ask for clarification if your instructions or any tasks are unclear
 **NEVER** create files unless they're absolutely necessary for achieving your goal.
 **ALWAYS** prefer editing an existing file to creating a new one.
 **NEVER** proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
-**NEVER** use mocks or simulated behavior in tests
-**NEVER** rewrite tests using mocks to get them to pass
-**ALWAYS** test actual behavior
 **ALWAYS** run the tests after writing them
+**NEVER** use mocks or simulated behavior in tests
+**ALWAYS** test actual behavior
+**NEVER** rewrite tests using mocks to get them to pass
 **NEVER** assume that a test failure is irrelevant or unrelated to your changes
+**ALWAYS** run the tests after completing your tasks to verify that there are no test failures
+**ALWAYS** ensure that the test pass rate is 100% with zero failing, skipped, or disabled tests
