@@ -5,15 +5,26 @@
   "main": "index.html",
   "scripts": {
     "test": "node tests/cli-test-runner.js",
-    "test:watch": "node tests/cli-test-runner.js --watch"
+    "test:watch": "node tests/cli-test-runner.js --watch",
+    "test:jest": "jest",
+    "test:jest:watch": "jest --watch",
+    "test:jest:coverage": "jest --coverage"
   },
-  "keywords": ["simulation", "evolution", "slime-mold", "aggregation", "html5"],
+  "keywords": [
+    "simulation",
+    "evolution",
+    "slime-mold",
+    "aggregation",
+    "html5"
+  ],
   "author": "SlimeWorld Project",
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
   },
   "devDependencies": {
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
     "puppeteer": "^21.0.0"
   },
   "optionalDependencies": {
