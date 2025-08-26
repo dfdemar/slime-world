@@ -191,44 +191,75 @@ describe('Full Simulation - End-to-End Testing', () => {
 
     test('Different archetypes create colonies with distinct traits', async () => {
       const archetypeComparison = await page.evaluate(() => {
+        // Get base archetype definitions for validation
+        const matBase = Archetypes.MAT.base;
+        const towerBase = Archetypes.TOWER.base;
+        const eatBase = Archetypes.EAT.base;
+        
+        // Create colonies
         const mat = newColony('MAT', 20, 20);
         const tower = newColony('TOWER', 25, 25);
         const eat = newColony('EAT', 30, 30);
         
         return {
-          mat: {
-            type: mat.type,
-            waterNeed: mat.traits.water_need,
-            photosym: mat.traits.photosym,
-            transport: mat.traits.transport
+          baselines: {
+            mat: matBase,
+            tower: towerBase,
+            eat: eatBase
           },
-          tower: {
-            type: tower.type,
-            waterNeed: tower.traits.water_need,
-            photosym: tower.traits.photosym,
-            transport: tower.traits.transport
-          },
-          eat: {
-            type: eat.type,
-            waterNeed: eat.traits.water_need,
-            photosym: eat.traits.photosym,
-            transport: eat.traits.transport
+          colonies: {
+            mat: {
+              type: mat.type,
+              waterNeed: mat.traits.water_need,
+              photosym: mat.traits.photosym,
+              transport: mat.traits.transport,
+              predation: mat.traits.predation
+            },
+            tower: {
+              type: tower.type,
+              waterNeed: tower.traits.water_need,
+              photosym: tower.traits.photosym,
+              transport: tower.traits.transport,
+              predation: tower.traits.predation
+            },
+            eat: {
+              type: eat.type,
+              waterNeed: eat.traits.water_need,
+              photosym: eat.traits.photosym,
+              transport: eat.traits.transport,
+              predation: eat.traits.predation
+            }
           }
         };
       });
 
-      // MAT should have high water need
-      expect(archetypeComparison.mat.waterNeed).toBeGreaterThan(0.6);
+      const { baselines, colonies } = archetypeComparison;
       
-      // TOWER should have high photosynthesis
-      expect(archetypeComparison.tower.photosym).toBeGreaterThan(0.6);
+      // MAT archetype validation (water_need: 0.7, photosym: 0.15) - allow for mutation
+      expect(colonies.mat.waterNeed).toBeCloseTo(baselines.mat.water_need, 0); // Within 0.5 due to mutation
+      expect(colonies.mat.photosym).toBeCloseTo(baselines.mat.photosym, 0);
+      expect(colonies.mat.waterNeed).toBeGreaterThan(0.6); // High water dependency range
       
-      // EAT should have low photosynthesis
-      expect(archetypeComparison.eat.photosym).toBeLessThan(0.3);
+      // TOWER archetype validation (photosym: 0.75, predation: 0.05) - allow for mutation
+      expect(colonies.tower.photosym).toBeCloseTo(baselines.tower.photosym, 0);
+      expect(colonies.tower.predation).toBeCloseTo(baselines.tower.predation, 0);
+      expect(colonies.tower.photosym).toBeGreaterThan(0.6); // High photosynthesis range
       
-      // Archetypes should be different
-      expect(archetypeComparison.mat.type).not.toBe(archetypeComparison.tower.type);
-      expect(archetypeComparison.tower.type).not.toBe(archetypeComparison.eat.type);
+      // EAT archetype validation (photosym: 0.0, predation: 0.85) - allow for mutation
+      expect(colonies.eat.photosym).toBeCloseTo(baselines.eat.photosym, 0);
+      expect(colonies.eat.predation).toBeCloseTo(baselines.eat.predation, 0);
+      expect(colonies.eat.photosym).toBeLessThan(0.2); // Should remain very low
+      expect(colonies.eat.predation).toBeGreaterThan(0.7); // High predation range
+      
+      // Verify archetype distinctiveness
+      expect(colonies.mat.type).not.toBe(colonies.tower.type);
+      expect(colonies.tower.type).not.toBe(colonies.eat.type);
+      
+      // Verify biological accuracy relationships
+      expect(colonies.mat.waterNeed).toBeGreaterThan(colonies.tower.waterNeed); // MAT > TOWER water need
+      expect(colonies.tower.photosym).toBeGreaterThan(colonies.mat.photosym);   // TOWER > MAT photosynthesis
+      expect(colonies.tower.photosym).toBeGreaterThan(colonies.eat.photosym);   // TOWER > EAT photosynthesis
+      expect(colonies.eat.predation).toBeGreaterThan(colonies.mat.predation);   // EAT > MAT predation
     });
   });
 
@@ -263,35 +294,69 @@ describe('Full Simulation - End-to-End Testing', () => {
 
     test('Slime trails diffuse and evaporate over time', async () => {
       const slimeTest = await page.evaluate(() => {
-        // Create colony to deposit slime
-        newColony('MAT', 50, 25);
+        // Create colony to deposit slime, then pause to prevent further deposition
+        const colony = newColony('MAT', 50, 25);
         const centerIdx = 25 * World.W + 50;
         
+        // Initial measurement after colony creation
         const initialSlime = Slime.trail[centerIdx];
         const initialSum = Array.from(Slime.trail).reduce((a, b) => a + b, 0);
         
-        // Run several steps to see diffusion/evaporation
-        for (let i = 0; i < 10; i++) {
-          stepEcosystem();
+        // Remove colony to stop further slime deposition
+        World.colonies = [];
+        World.tiles.fill(-1);
+        World.biomass.fill(0);
+        
+        // Collect neighbor slime values before diffusion
+        const neighbors = [
+          Slime.trail[centerIdx - World.W] || 0,     // above
+          Slime.trail[centerIdx + World.W] || 0,     // below  
+          Slime.trail[centerIdx - 1] || 0,           // left
+          Slime.trail[centerIdx + 1] || 0            // right
+        ];
+        const initialNeighborSum = neighbors.reduce((a, b) => a + b, 0);
+        
+        // Run diffusion/evaporation steps only (no colony updates)
+        for (let i = 0; i < 8; i++) {
+          Slime.diffuseEvaporate();
         }
         
         const finalSlime = Slime.trail[centerIdx];
         const finalSum = Array.from(Slime.trail).reduce((a, b) => a + b, 0);
+        
+        // Check neighbor values after diffusion
+        const finalNeighbors = [
+          Slime.trail[centerIdx - World.W] || 0,     // above
+          Slime.trail[centerIdx + World.W] || 0,     // below  
+          Slime.trail[centerIdx - 1] || 0,           // left
+          Slime.trail[centerIdx + 1] || 0            // right
+        ];
+        const finalNeighborSum = finalNeighbors.reduce((a, b) => a + b, 0);
         
         return {
           initialSlime,
           finalSlime,
           initialSum,
           finalSum,
-          slimeReduced: finalSlime < initialSlime,
-          totalReduced: finalSum < initialSum
+          initialNeighborSum,
+          finalNeighborSum,
+          evaporationOccurred: finalSum < initialSum * 0.98, // Account for 8 steps of 1.5% evaporation
+          diffusionOccurred: finalNeighborSum > initialNeighborSum,
+          centerReduced: finalSlime < initialSlime
         };
       });
 
+      // Colony should have deposited initial slime
       expect(slimeTest.initialSlime).toBeGreaterThan(0);
-      // Slime should change over time (either evaporate or diffuse)
-      expect(slimeTest.slimeReduced || slimeTest.finalSlime !== slimeTest.initialSlime).toBe(true);
-      // Total may increase due to ongoing colony deposition, but should eventually decrease if left alone
+      
+      // After 8 steps with 1.5% evaporation per step, total should decrease significantly
+      expect(slimeTest.evaporationOccurred).toBe(true);
+      
+      // Slime should diffuse from center to neighbors
+      expect(slimeTest.diffusionOccurred).toBe(true);
+      
+      // Center concentration should reduce due to both evaporation and diffusion
+      expect(slimeTest.centerReduced).toBe(true);
     });
 
     test('Colonies attempt expansion and fitness affects success', async () => {
@@ -333,56 +398,94 @@ describe('Full Simulation - End-to-End Testing', () => {
   describe('Population Dynamics', () => {
     test('Colonies can reproduce when conditions are favorable', async () => {
       const reproductionTest = await page.evaluate(() => {
-        // Create a colony with high biomass
-        const parentColony = newColony('MAT', World.W / 2, World.H / 2);
-        parentColony.biomass = 2.0; // Set high biomass to encourage reproduction
+        // Create optimal conditions for reproduction
+        const centerX = Math.floor(World.W / 2);
+        const centerY = Math.floor(World.H / 2);
+        const centerIdx = centerY * World.W + centerX;
+        
+        // Set up ideal environment around the colony
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const y = centerY + dy;
+            const x = centerX + dx;
+            if (x >= 0 && x < World.W && y >= 0 && y < World.H) {
+              const idx = y * World.W + x;
+              World.env.nutrient[idx] = 0.9;  // Rich nutrients
+              World.env.light[idx] = 0.8;     // Good light
+              World.env.humidity[idx] = 0.8;  // Good humidity
+              World.env.water[idx] = 1;       // Water available
+            }
+          }
+        }
+        
+        // Create colony with high biomass and good fitness potential
+        const parentColony = newColony('MAT', centerX, centerY);
+        parentColony.biomass = 3.0;  // Very high biomass for reproduction
+        parentColony.age = 10;       // Mature colony
         
         const initialCount = World.colonies.length;
-        let reproduced = false;
+        let stepsTaken = 0;
         
-        // Run simulation until reproduction or timeout
-        for (let i = 0; i < 50 && World.colonies.length === initialCount; i++) {
+        // Run simulation with deterministic reproduction conditions
+        for (let i = 0; i < 30; i++) {
+          stepsTaken = i + 1;
           stepEcosystem();
+          
+          // Break if we see reproduction
           if (World.colonies.length > initialCount) {
-            reproduced = true;
             break;
           }
         }
         
         const finalCount = World.colonies.length;
-        const hasChildren = World.colonies.some(c => c.kids && c.kids.length > 0);
+        const reproduced = finalCount > initialCount;
+        
+        // Gather detailed colony data
+        const coloniesData = World.colonies.map(c => ({
+          id: c.id,
+          type: c.type,
+          gen: c.gen,
+          parent: c.parent,
+          kids: c.kids ? c.kids.length : 0,
+          biomass: c.biomass,
+          age: c.age,
+          fitness: c.lastFit || 0
+        }));
+        
+        const foundParent = coloniesData.find(c => c.kids > 0);
+        const foundChild = coloniesData.find(c => c.parent !== null);
         
         return {
           initialCount,
           finalCount,
+          stepsTaken,
           reproduced,
-          hasChildren,
-          coloniesData: World.colonies.map(c => ({
-            id: c.id,
-            type: c.type,
-            gen: c.gen,
-            parent: c.parent,
-            kids: c.kids ? c.kids.length : 0
-          }))
+          parentColony: foundParent || null,
+          childColony: foundChild || null,
+          allColoniesData: coloniesData,
+          environmentalConditions: {
+            centerNutrient: World.env.nutrient[centerIdx],
+            centerLight: World.env.light[centerIdx],
+            centerWater: World.env.water[centerIdx]
+          }
         };
       });
 
+      // Basic setup validation
       expect(reproductionTest.initialCount).toBe(1);
       
-      if (reproductionTest.reproduced) {
-        expect(reproductionTest.finalCount).toBeGreaterThan(1);
-        expect(reproductionTest.hasChildren).toBe(true);
-        
-        // Check parent-child relationships
-        const parentColony = reproductionTest.coloniesData.find(c => c.kids > 0);
-        const childColony = reproductionTest.coloniesData.find(c => c.parent !== null);
-        
-        if (parentColony && childColony) {
-          expect(parentColony.kids).toBeGreaterThan(0);
-          expect(childColony.gen).toBeGreaterThan(parentColony.gen);
-          expect(childColony.parent).toBe(parentColony.id);
-        }
-      }
+      // Reproduction should occur under these optimal conditions
+      expect(reproductionTest.reproduced).toBe(true);
+      expect(reproductionTest.finalCount).toBeGreaterThan(1);
+      
+      // Validate parent-child relationships when reproduction occurs
+      expect(reproductionTest.parentColony).not.toBeNull();
+      expect(reproductionTest.childColony).not.toBeNull();
+      
+      expect(reproductionTest.parentColony.kids).toBeGreaterThan(0);
+      expect(reproductionTest.childColony.gen).toBeGreaterThan(reproductionTest.parentColony.gen);
+      expect(reproductionTest.childColony.parent).toBe(reproductionTest.parentColony.id);
+      expect(reproductionTest.childColony.type).toBe(reproductionTest.parentColony.type);
     });
 
     test('Multiple archetype populations can coexist', async () => {
@@ -432,8 +535,15 @@ describe('Full Simulation - End-to-End Testing', () => {
       expect(coexistenceTest.totalInitial).toBeGreaterThan(0);
       expect(coexistenceTest.totalFinal).toBeGreaterThan(0);
       
-      // Should maintain some diversity
-      expect(coexistenceTest.typesPresent).toBeGreaterThan(0);
+      // Should maintain meaningful diversity (at least 2 different archetypes)
+      expect(coexistenceTest.typesPresent).toBeGreaterThanOrEqual(2);
+      expect(coexistenceTest.diversityMaintained).toBe(true);
+      
+      // At least half of the initial archetype types should survive
+      const initialTypes = Object.keys(coexistenceTest.initialCounts).filter(
+        type => coexistenceTest.initialCounts[type] > 0
+      ).length;
+      expect(coexistenceTest.typesPresent).toBeGreaterThanOrEqual(Math.ceil(initialTypes / 2));
     });
 
     test('Starvation sweep removes weak colonies', async () => {
@@ -479,21 +589,129 @@ describe('Full Simulation - End-to-End Testing', () => {
   });
 
   describe('Environmental Interactions', () => {
-    test('Nutrient dynamics affect colony success', async () => {
+    test('Nutrient consumption affects colony growth and fitness', async () => {
       const nutrientTest = await page.evaluate(() => {
-        // Create colonies in different nutrient environments
-        const highNutrientX = 30, highNutrientY = 30;
-        const lowNutrientX = 100, lowNutrientY = 50;
+        // Helper function to set up environmental areas
+        const setupEnvironmentalArea = (centerX, centerY, conditions, radius = 2) => {
+          for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+              const y = centerY + dy;
+              const x = centerX + dx;
+              if (x >= 0 && x < World.W && y >= 0 && y < World.H) {
+                const idx = y * World.W + x;
+                if (conditions.nutrient !== undefined) World.env.nutrient[idx] = conditions.nutrient;
+                if (conditions.humidity !== undefined) World.env.humidity[idx] = conditions.humidity;
+                if (conditions.light !== undefined) World.env.light[idx] = conditions.light;
+                if (conditions.water !== undefined) World.env.water[idx] = conditions.water;
+              }
+            }
+          }
+        };
         
-        // Manually set nutrient levels for testing
-        const highIdx = highNutrientY * World.W + highNutrientX;
-        const lowIdx = lowNutrientY * World.W + lowNutrientX;
+        // Create rich and poor nutrient areas (5x5 patches for meaningful area coverage)
+        const richCenterX = 40, richCenterY = 30;
+        const poorCenterX = 120, poorCenterY = 60;
         
-        World.env.nutrient[highIdx] = 0.9; // High nutrients
-        World.env.nutrient[lowIdx] = 0.1;  // Low nutrients
+        setupEnvironmentalArea(richCenterX, richCenterY, {
+          nutrient: 0.9,
+          humidity: 0.7,
+          light: 0.6
+        });
         
-        const highNutrientColony = newColony('MAT', highNutrientX, highNutrientY);
-        const lowNutrientColony = newColony('MAT', lowNutrientX, lowNutrientY);
+        setupEnvironmentalArea(poorCenterX, poorCenterY, {
+          nutrient: 0.1,
+          humidity: 0.3,
+          light: 0.6
+        });
+        
+        const richCenterIdx = richCenterY * World.W + richCenterX;
+        const poorCenterIdx = poorCenterY * World.W + poorCenterX;
+        
+        const initialRichNutrients = World.env.nutrient[richCenterIdx];
+        const initialPoorNutrients = World.env.nutrient[poorCenterIdx];
+        
+        // Create identical MAT colonies in both areas
+        const richColony = newColony('MAT', richCenterX, richCenterY);
+        const poorColony = newColony('MAT', poorCenterX, poorCenterY);
+        
+        // Run simulation long enough for meaningful growth differences
+        for (let i = 0; i < 25; i++) {
+          stepEcosystem();
+        }
+        
+        const finalRichNutrients = World.env.nutrient[richCenterIdx];
+        const finalPoorNutrients = World.env.nutrient[poorCenterIdx];
+        
+        return {
+          richColonyFitness: richColony.lastFit || 0,
+          poorColonyFitness: poorColony.lastFit || 0,
+          richColonyBiomass: richColony.biomass,
+          poorColonyBiomass: poorColony.biomass,
+          nutrientConsumption: {
+            rich: initialRichNutrients - finalRichNutrients,
+            poor: initialPoorNutrients - finalPoorNutrients
+          }
+        };
+      });
+
+      // Verify nutrient consumption occurred during simulation
+      expect(nutrientTest.nutrientConsumption.rich).toBeGreaterThan(0);
+      
+      // Environmental advantage threshold - rich environment should provide at least 25% better performance
+      // This reflects the biological expectation that 9x nutrient difference (0.9 vs 0.1) should create measurable advantage
+      const ENVIRONMENTAL_ADVANTAGE_THRESHOLD = 1.25;
+      
+      // Rich environment should produce significantly higher fitness
+      expect(nutrientTest.richColonyFitness).toBeGreaterThanOrEqual(nutrientTest.poorColonyFitness * ENVIRONMENTAL_ADVANTAGE_THRESHOLD);
+      
+      // Rich colony should have grown more biomass due to better conditions  
+      expect(nutrientTest.richColonyBiomass).toBeGreaterThan(nutrientTest.poorColonyBiomass);
+      
+      // Both colonies should have positive fitness (survived)
+      expect(nutrientTest.richColonyFitness).toBeGreaterThan(0);
+      expect(nutrientTest.poorColonyFitness).toBeGreaterThan(0);
+    });
+
+    test('Water availability affects MAT archetype performance', async () => {
+      const waterTest = await page.evaluate(() => {
+        // Helper function to set up environmental areas
+        const setupEnvironmentalArea = (centerX, centerY, conditions, radius = 2) => {
+          for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+              const y = centerY + dy;
+              const x = centerX + dx;
+              if (x >= 0 && x < World.W && y >= 0 && y < World.H) {
+                const idx = y * World.W + x;
+                if (conditions.nutrient !== undefined) World.env.nutrient[idx] = conditions.nutrient;
+                if (conditions.humidity !== undefined) World.env.humidity[idx] = conditions.humidity;
+                if (conditions.light !== undefined) World.env.light[idx] = conditions.light;
+                if (conditions.water !== undefined) World.env.water[idx] = conditions.water;
+              }
+            }
+          }
+        };
+        
+        // Create water-rich and water-poor areas programmatically
+        const waterRichX = 50, waterRichY = 35;
+        const waterPoorX = 110, waterPoorY = 55;
+        
+        setupEnvironmentalArea(waterRichX, waterRichY, {
+          water: 1,        // Water present
+          nutrient: 0.6,   // Moderate nutrients
+          humidity: 0.8,   // High humidity
+          light: 0.5       // Moderate light
+        });
+        
+        setupEnvironmentalArea(waterPoorX, waterPoorY, {
+          water: 0,        // No water
+          nutrient: 0.6,   // Same nutrients
+          humidity: 0.3,   // Low humidity
+          light: 0.5       // Same light
+        });
+        
+        // Create MAT colonies (water_need: 0.7 - high water dependency)
+        const waterRichColony = newColony('MAT', waterRichX, waterRichY);
+        const waterPoorColony = newColony('MAT', waterPoorX, waterPoorY);
         
         // Run simulation
         for (let i = 0; i < 20; i++) {
@@ -501,75 +719,33 @@ describe('Full Simulation - End-to-End Testing', () => {
         }
         
         return {
-          highNutrientFitness: highNutrientColony ? highNutrientColony.lastFit : 0,
-          lowNutrientFitness: lowNutrientColony ? lowNutrientColony.lastFit : 0,
-          highNutrientBiomass: highNutrientColony ? highNutrientColony.biomass : 0,
-          lowNutrientBiomass: lowNutrientColony ? lowNutrientColony.biomass : 0,
-          bothSurvived: !!(highNutrientColony && lowNutrientColony),
-          highSurvived: !!highNutrientColony,
-          lowSurvived: !!lowNutrientColony
+          waterRichFitness: waterRichColony.lastFit || 0,
+          waterPoorFitness: waterPoorColony.lastFit || 0,
+          waterRichBiomass: waterRichColony.biomass,
+          waterPoorBiomass: waterPoorColony.biomass,
+          matWaterNeed: waterRichColony.traits.water_need
         };
       });
 
-      // Check if both colonies were created (they might not survive harsh conditions)
-      expect(typeof nutrientTest.bothSurvived).toBe('boolean');
+      // Verify MAT archetype has high water need as expected
+      expect(waterTest.matWaterNeed).toBeCloseTo(0.7, 1); // MAT base water_need
       
-      // High nutrient colony should generally perform better
-      expect(nutrientTest.highNutrientFitness).toBeGreaterThan(0);
-      expect(nutrientTest.lowNutrientFitness).toBeGreaterThan(0);
-    });
-
-    test('Water availability affects water-dependent archetypes', async () => {
-      const waterTest = await page.evaluate(() => {
-        // Find water and dry areas
-        let waterIdx = -1, dryIdx = -1;
-        
-        for (let i = 0; i < World.env.water.length && (waterIdx === -1 || dryIdx === -1); i++) {
-          if (World.env.water[i] === 1 && waterIdx === -1) {
-            waterIdx = i;
-          } else if (World.env.water[i] === 0 && dryIdx === -1) {
-            dryIdx = i;
-          }
-        }
-        
-        if (waterIdx === -1 || dryIdx === -1) {
-          return { testSkipped: true, reason: 'Could not find suitable water/dry areas' };
-        }
-        
-        const waterX = waterIdx % World.W;
-        const waterY = Math.floor(waterIdx / World.W);
-        const dryX = dryIdx % World.W;
-        const dryY = Math.floor(dryIdx / World.W);
-        
-        // Create MAT colonies (high water need) in both areas
-        const waterColony = newColony('MAT', waterX, waterY);
-        const dryColony = newColony('MAT', dryX, dryY);
-        
-        if (!waterColony || !dryColony) {
-          return { testSkipped: true, reason: 'Failed to create test colonies' };
-        }
-        
-        // Run simulation
-        for (let i = 0; i < 15; i++) {
-          stepEcosystem();
-        }
-        
-        return {
-          testSkipped: false,
-          waterColonyFitness: waterColony.lastFit || 0,
-          dryColonyFitness: dryColony.lastFit || 0,
-          waterColonyBiomass: waterColony.biomass,
-          dryColonyBiomass: dryColony.biomass,
-          waterAdvantage: (waterColony.lastFit || 0) >= (dryColony.lastFit || 0)
-        };
-      });
-
-      if (!waterTest.testSkipped) {
-        expect(waterTest.waterColonyFitness).toBeGreaterThan(0);
-        expect(waterTest.dryColonyFitness).toBeGreaterThan(0);
-        // Water colony should generally have advantage for MAT archetype
-        expect(waterTest.waterColonyFitness).toBeGreaterThanOrEqual(waterTest.dryColonyFitness * 0.8);
-      }
+      // Water dependency threshold - MAT archetype (water_need: 0.7) should show strong preference for water
+      // This reflects that high-water-need organisms should perform 30% better in water-rich environments
+      const WATER_DEPENDENCY_ADVANTAGE = 1.3;
+      
+      // Water-rich colony should significantly outperform water-poor colony due to MAT's high water need (0.7)
+      expect(waterTest.waterRichFitness).toBeGreaterThan(waterTest.waterPoorFitness);
+      
+      // Water-rich colony should have grown more biomass in suitable habitat
+      expect(waterTest.waterRichBiomass).toBeGreaterThan(waterTest.waterPoorBiomass);
+      
+      // Both should survive but with different performance levels
+      expect(waterTest.waterRichFitness).toBeGreaterThan(0);
+      expect(waterTest.waterPoorFitness).toBeGreaterThan(0);
+      
+      // Performance difference should be substantial for high-water-need archetype (MAT water_need: 0.7)
+      expect(waterTest.waterRichFitness).toBeGreaterThanOrEqual(waterTest.waterPoorFitness * WATER_DEPENDENCY_ADVANTAGE);
     });
   });
 
